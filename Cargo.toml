@@ -1,0 +1,25 @@
+[package]
+name = "grim-rs"
+version = "0.1.0"
+edition = "2021"
+authors = ["Andrew Nevsky <hopperplayer0@gmail.com>"]
+description = "Wayland screenshot library and CLI using zwlr_screencopy_manager_v1 (grim-like, but in Rust)"
+license = "MIT"
+repository = "https://github.com/vremayvnikuda/grim-rs"
+homepage = "https://github.com/vremayvnikuda/grim-rs"
+documentation = "https://docs.rs/grim-rs"
+readme = "README.md"
+keywords = ["wayland", "screenshot", "grim", "cli", "library"]
+categories = ["command-line-utilities", "graphics", "os::unix-apis"]
+exclude = [".gitignore", ".github/", "target/", "examples/"]
+
+[dependencies]
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+image = "0.25"
+tempfile = "3.8"
+libc = "0.2"
+log = "0.4"
+env_logger = "0.10"
+chrono = "0.4"
