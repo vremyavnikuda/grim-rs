@@ -98,6 +98,8 @@ pub struct RegionSelectState {
     selection_state: Arc<Mutex<SelectionState>>,
     last_update: Arc<Mutex<Instant>>,
     update_interval: Duration,
+    back_buffer: Option<wl_buffer::WlBuffer>,
+    back_buffer_file: Option<File>,
 }
 
 impl RegionSelectState {
@@ -122,6 +124,8 @@ impl RegionSelectState {
             layer_shell: None,
             buffer: None,
             buffer_file: None,
+            back_buffer: None,
+            back_buffer_file: None,
             width,
             height,
             start_x: 0,
@@ -144,151 +148,22 @@ impl RegionSelectState {
     fn draw(&mut self, qh: &QueueHandle<Self>) -> Result<(), Box<dyn std::error::Error>> {
         let surface = match self.surface.as_ref() {
             Some(s) => s,
-            None => {
-                log::error!("No surface available for drawing");
-                return Ok(());
-            }
+            None => return Ok(()),
         };
-        
-        // Освобождаем предыдущий буфер
-        if let Some(buffer) = self.buffer.take() {
-            buffer.destroy();
+
+        // Создаем новый буфер, если его нет
+        if self.back_buffer.is_none() {
+            let (buffer, file) = self.create_buffer(qh)?;
+            self.back_buffer = Some(buffer);
+            self.back_buffer_file = Some(file);
         }
-        self.buffer_file = None;
-        
+
+        let buffer = self.back_buffer.as_ref().unwrap();
+        let file = self.back_buffer_file.as_ref().unwrap();
+
         // Создаем временный surface для рисования
-        let image_surface = match ImageSurface::create(Format::ARgb32, self.width as i32, self.height as i32) {
-            Ok(s) => s,
-            Err(e) => {
-                log::error!("Failed to create image surface: {}", e);
-                return Ok(());
-            }
-        };
-
-        let context = match Context::new(&image_surface) {
-            Ok(c) => c,
-            Err(e) => {
-                log::error!("Failed to create cairo context: {}", e);
-                return Ok(());
-            }
-        };
-
-        // Затемнение фона
-        context.set_source_rgba(0.0, 0.0, 0.0, 0.5);
-        if let Err(e) = context.paint() {
-            log::error!("Failed to paint background: {}", e);
-            return Ok(());
-        }
-
-        // Получаем текущее состояние выделения
-        let selection = self.selection_state.blocking_lock().selection;
-        
-        // Рисуем рамку выделения, если есть выделение
-        if let Some((x, y, w, h)) = selection {
-            log::debug!("Drawing selection: x={}, y={}, w={}, h={}", x, y, w, h);
-
-            // Рисуем полупрозрачную область выделения
-            context.set_source_rgba(1.0, 0.4, 0.4, 0.3); // Светло-розовый цвет с прозрачностью
-            context.rectangle(x as f64, y as f64, w as f64, h as f64);
-            if let Err(e) = context.fill() {
-                log::error!("Failed to fill rectangle: {}", e);
-                return Ok(());
-            }
-
-            // Рисуем рамку
-            context.set_source_rgba(1.0, 0.0, 0.0, 1.0); // Ярко-красная рамка
-            context.rectangle(x as f64, y as f64, w as f64, h as f64);
-            context.set_line_width(2.0);
-            if let Err(e) = context.stroke() {
-                log::error!("Failed to draw rectangle: {}", e);
-                return Ok(());
-            }
-
-            // Рисуем угловые маркеры
-            let marker_size = 10.0;
-            context.set_source_rgba(1.0, 0.0, 0.0, 1.0); // Красные маркеры
-            
-            // Рисуем маркеры по углам прямоугольника
-            context.rectangle(x as f64 - marker_size/2.0, y as f64 - marker_size/2.0, marker_size, marker_size);
-            context.rectangle((x + w) as f64 - marker_size/2.0, y as f64 - marker_size/2.0, marker_size, marker_size);
-            context.rectangle(x as f64 - marker_size/2.0, (y + h) as f64 - marker_size/2.0, marker_size, marker_size);
-            context.rectangle((x + w) as f64 - marker_size/2.0, (y + h) as f64 - marker_size/2.0, marker_size, marker_size);
-            
-            if let Err(e) = context.fill() {
-                log::error!("Failed to draw corner markers: {}", e);
-                return Ok(());
-            }
-
-            // Отображаем размеры выбранной области
-            let text = format!("{}x{}", w, h);
-            context.set_source_rgba(1.0, 1.0, 1.0, 1.0); // Белый текст
-            context.set_font_size(24.0); // Увеличиваем размер шрифта
-            let extents = match context.text_extents(&text) {
-                Ok(e) => e,
-                Err(e) => {
-                    log::error!("Failed to get text extents: {}", e);
-                    return Ok(());
-                }
-            };
-            
-            // Рисуем фон для текста
-            let text_x = x as f64 + (w as f64 / 2.0) - (extents.width() / 2.0);
-            let text_y = y as f64 + (h as f64 / 2.0) + (extents.height() / 2.0);
-            context.set_source_rgba(0.0, 0.0, 0.0, 0.8); // Темный фон для текста
-            context.rectangle(
-                text_x - 8.0,
-                text_y - extents.height() - 8.0,
-                extents.width() + 16.0,
-                extents.height() + 16.0
-            );
-            if let Err(e) = context.fill() {
-                log::error!("Failed to draw text background: {}", e);
-                return Ok(());
-            }
-
-            // Рисуем текст с размерами
-            context.set_source_rgba(1.0, 1.0, 1.0, 1.0); // Белый текст
-            context.move_to(text_x, text_y);
-            if let Err(e) = context.show_text(&text) {
-                log::error!("Failed to show text: {}", e);
-                return Ok(());
-            }
-        }
-
-        // Создаём shm-буфер для передачи данных в Wayland
-        let stride = self.width * 4; // 4 байта на пиксель (ARGB)
+        let stride = self.width * 4;
         let size = (stride * self.height) as usize;
-        let file = match tempfile() {
-            Ok(f) => f,
-            Err(e) => {
-                log::error!("Failed to create tempfile: {}", e);
-                return Ok(());
-            }
-        };
-
-        if let Err(e) = file.set_len(size as u64) {
-            log::error!("Failed to set file length: {}", e);
-            return Ok(());
-        }
-
-        let shm = self.shm.as_ref().ok_or("No SHM available")?;
-        let pool = unsafe {
-            let fd = BorrowedFd::borrow_raw(file.as_raw_fd());
-            shm.create_pool(fd, size as i32, qh, ())
-        };
-
-        // Создаем буфер в пуле
-        let buffer = pool.create_buffer(
-            0,
-            self.width as i32,
-            self.height as i32,
-            stride as i32,
-            wl_shm::Format::Argb8888,
-            qh,
-            (),
-        );
-
-        // Отображаем файл в память
         let mmap = unsafe {
             libc::mmap(
                 std::ptr::null_mut(),
@@ -301,11 +176,9 @@ impl RegionSelectState {
         };
 
         if mmap == libc::MAP_FAILED {
-            log::error!("mmap failed");
             return Ok(());
         }
 
-        // Создаем surface для данных
         let data_surface = match ImageSurface::create_for_data(
             unsafe { std::slice::from_raw_parts_mut(mmap as *mut u8, size) },
             Format::ARgb32,
@@ -314,46 +187,68 @@ impl RegionSelectState {
             stride as i32,
         ) {
             Ok(s) => s,
-            Err(e) => {
-                log::error!("Failed to create data surface: {}", e);
+            Err(_) => {
                 unsafe { libc::munmap(mmap, size) };
                 return Ok(());
             }
         };
 
-        // Копируем данные из image_surface в data_surface
-        let data_context = match Context::new(&data_surface) {
+        let context = match Context::new(&data_surface) {
             Ok(c) => c,
-            Err(e) => {
-                log::error!("Failed to create data context: {}", e);
+            Err(_) => {
                 unsafe { libc::munmap(mmap, size) };
                 return Ok(());
             }
         };
 
-        if let Err(e) = data_context.set_source_surface(&image_surface, 0.0, 0.0) {
-            log::error!("Failed to set source surface: {}", e);
-            unsafe { libc::munmap(mmap, size) };
-            return Ok(());
+        // Очищаем поверхность
+        context.set_source_rgba(0.0, 0.0, 0.0, 0.0);
+        context.paint().ok();
+
+        // Получаем текущее состояние выделения
+        let selection = self.selection_state.blocking_lock().selection;
+        
+        // Рисуем рамку выделения
+        if let Some((x, y, w, h)) = selection {
+            // Рисуем рамку
+            context.set_source_rgba(1.0, 1.0, 1.0, 1.0);
+            context.rectangle(x as f64, y as f64, w as f64, h as f64);
+            context.set_line_width(2.0);
+            context.stroke().ok();
+
+            // Отображаем размеры
+            let text = format!("{}x{}", w, h);
+            context.set_source_rgba(1.0, 1.0, 1.0, 1.0);
+            context.set_font_size(24.0);
+            if let Ok(extents) = context.text_extents(&text) {
+                let text_x = x as f64 + (w as f64 / 2.0) - (extents.width() / 2.0);
+                let text_y = y as f64 + (h as f64 / 2.0) + (extents.height() / 2.0);
+                
+                context.set_source_rgba(0.0, 0.0, 0.0, 0.8);
+                context.rectangle(
+                    text_x - 8.0,
+                    text_y - extents.height() - 8.0,
+                    extents.width() + 16.0,
+                    extents.height() + 16.0
+                );
+                context.fill().ok();
+
+                context.set_source_rgba(1.0, 1.0, 1.0, 1.0);
+                context.move_to(text_x, text_y);
+                context.show_text(&text).ok();
+            }
         }
 
-        if let Err(e) = data_context.paint() {
-            log::error!("Failed to paint data: {}", e);
-            unsafe { libc::munmap(mmap, size) };
-            return Ok(());
-        }
+        unsafe { libc::munmap(mmap, size) };
 
-        // Освобождаем отображение памяти
-        unsafe {
-            libc::munmap(mmap, size);
-        }
-
-        // Прикрепляем буфер к поверхности и обновляем её
-        surface.attach(Some(&buffer), 0, 0);
+        // Прикрепляем буфер к поверхности
+        surface.attach(Some(buffer), 0, 0);
         surface.damage(0, 0, self.width as i32, self.height as i32);
         surface.commit();
-        self.buffer = Some(buffer);
-        self.buffer_file = Some(file);
+
+        // Меняем буферы местами
+        std::mem::swap(&mut self.buffer, &mut self.back_buffer);
+        std::mem::swap(&mut self.buffer_file, &mut self.back_buffer_file);
 
         Ok(())
     }
@@ -369,46 +264,30 @@ impl RegionSelectState {
         }
     }
 
-    async fn draw_selection(&mut self, qh: &QueueHandle<Self>) {
-        if !self.should_update().await {
-            return;
-        }
-
-        if let Some(surface) = &self.surface {
+    fn draw_selection(&mut self, qh: &QueueHandle<Self>) {
+        if let Some(_surface) = &self.surface {
             if let Some(_layer_surface) = &self.layer_surface {
-                let selection_state = self.selection_state.lock().await;
-                if let Some(selection) = selection_state.selection {
-                    let (x, y, w, h) = selection;
-                    log::debug!("Drawing selection: x={}, y={}, w={}, h={}", x, y, w, h);
-
-                    let buffer = self.create_buffer(w, h, qh);
-                    if let Some(buffer) = buffer {
-                        surface.attach(Some(&buffer), 0, 0);
-                        surface.damage(0, 0, w, h);
-                        surface.commit();
+                let selection = {
+                    let selection_state = self.selection_state.blocking_lock();
+                    selection_state.selection
+                };
+                
+                if selection.is_some() {
+                    if let Err(e) = self.draw(qh) {
+                        log::error!("Failed to draw: {}", e);
                     }
                 }
             }
         }
     }
 
-    fn create_buffer(&self, width: i32, height: i32, qh: &QueueHandle<Self>) -> Option<WlBuffer> {
-        let stride = width * 4;
-        let size = (stride * height) as usize;
-        let mut data = vec![0u8; size];
+    fn create_buffer(&self, qh: &QueueHandle<Self>) -> Result<(wl_buffer::WlBuffer, File), Box<dyn std::error::Error>> {
+        let stride = self.width * 4;
+        let size = (stride * self.height) as usize;
+        let file = tempfile()?;
+        file.set_len(size as u64)?;
 
-        // Fill with semi-transparent black
-        for pixel in data.chunks_mut(4) {
-            pixel[0] = 0;   // R
-            pixel[1] = 0;   // G
-            pixel[2] = 0;   // B
-            pixel[3] = 128; // A (semi-transparent)
-        }
-
-        let shm = self.shm.as_ref()?;
-        let file = tempfile().ok()?;
-        file.set_len(size as u64).ok()?;
-
+        let shm = self.shm.as_ref().ok_or("No SHM available")?;
         let pool = unsafe {
             let fd = BorrowedFd::borrow_raw(file.as_raw_fd());
             shm.create_pool(fd, size as i32, qh, ())
@@ -416,15 +295,15 @@ impl RegionSelectState {
 
         let buffer = pool.create_buffer(
             0,
-            width,
-            height,
-            stride,
+            self.width as i32,
+            self.height as i32,
+            stride as i32,
             wl_shm::Format::Argb8888,
             qh,
             (),
         );
 
-        Some(buffer)
+        Ok((buffer, file))
     }
 }
 
@@ -442,14 +321,12 @@ impl Dispatch<wl_pointer::WlPointer, ()> for RegionSelectState {
         
         match event {
             wl_pointer::Event::Button { button, state: button_state, .. } => {
-                log::debug!("Button event: button={}, state={:?}", button, button_state);
                 match button_state {
                     wayland_client::WEnum::Value(wl_pointer::ButtonState::Pressed) => {
                         if button == 272 { // Left mouse button
                             if let Some((x, y)) = selection_state.current_position {
                                 selection_state.selection_start = Some((x, y));
                                 selection_state.selection = Some((x, y, 0, 0));
-                                log::info!("Starting selection at ({}, {})", x, y);
                                 
                                 drop(selection_state);
                                 if let Err(e) = state.draw(qh) {
@@ -462,7 +339,6 @@ impl Dispatch<wl_pointer::WlPointer, ()> for RegionSelectState {
                         if button == 272 {
                             selection_state.selection_start = None;
                             if selection_state.selection.is_some() {
-                                log::info!("Selection completed: {:?}", selection_state.selection);
                                 selection_state.exit = true;
                             }
                         }
@@ -750,8 +626,54 @@ pub fn select_region_interactive_sctk() -> Option<Region> {
         let guard = state.selection_state.blocking_lock();
         guard.selection
     };
-    
-    // Уничтожаем все Wayland объекты перед возвратом результата
+
+    // Сначала очищаем поверхность
+    if let Some(surface) = &state.surface {
+        // Создаем пустой буфер
+        let stride = state.width * 4;
+        let size = (stride * state.height) as usize;
+        let file = match tempfile() {
+            Ok(f) => f,
+            Err(e) => {
+                log::error!("Failed to create tempfile: {}", e);
+                return None;
+            }
+        };
+
+        if let Err(e) = file.set_len(size as u64) {
+            log::error!("Failed to set file length: {}", e);
+            return None;
+        }
+
+        let shm = state.shm.as_ref().ok_or("No SHM available").unwrap();
+        let pool = unsafe {
+            let fd = BorrowedFd::borrow_raw(file.as_raw_fd());
+            shm.create_pool(fd, size as i32, &qh, ())
+        };
+
+        let buffer = pool.create_buffer(
+            0,
+            state.width as i32,
+            state.height as i32,
+            stride as i32,
+            wl_shm::Format::Argb8888,
+            &qh,
+            (),
+        );
+
+        // Прикрепляем пустой буфер
+        surface.attach(Some(&buffer), 0, 0);
+        surface.damage(0, 0, state.width as i32, state.height as i32);
+        surface.commit();
+
+        // Ждем обработки последнего кадра
+        for _ in 0..5 {
+            event_queue.blocking_dispatch(&mut state).ok();
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+    }
+
+    // Уничтожаем все Wayland объекты
     if let Some(surface) = state.surface.take() {
         surface.destroy();
     }
@@ -770,6 +692,20 @@ pub fn select_region_interactive_sctk() -> Option<Region> {
     if let Some(layer_shell) = state.layer_shell.take() {
         layer_shell.destroy();
     }
+
+    // Даем время на уничтожение объектов и обработку последнего кадра
+    std::thread::sleep(std::time::Duration::from_millis(200));
     
     selection.map(|(x, y, w, h)| Region { x, y, width: w, height: h })
+}
+
+impl Drop for RegionSelectState {
+    fn drop(&mut self) {
+        if let Some(buffer) = self.buffer.take() {
+            buffer.destroy();
+        }
+        if let Some(buffer) = self.back_buffer.take() {
+            buffer.destroy();
+        }
+    }
 }
