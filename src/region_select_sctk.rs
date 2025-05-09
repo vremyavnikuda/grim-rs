@@ -179,6 +179,11 @@ impl RegionSelectState {
             return Ok(());
         }
 
+        // Полностью очищаем буфер
+        unsafe {
+            std::ptr::write_bytes(mmap as *mut u8, 0, size);
+        }
+
         let data_surface = match ImageSurface::create_for_data(
             unsafe { std::slice::from_raw_parts_mut(mmap as *mut u8, size) },
             Format::ARgb32,
@@ -201,10 +206,6 @@ impl RegionSelectState {
             }
         };
 
-        // Очищаем поверхность
-        context.set_source_rgba(0.0, 0.0, 0.0, 0.0);
-        context.paint().ok();
-
         // Получаем текущее состояние выделения
         let selection = self.selection_state.blocking_lock().selection;
         
@@ -213,13 +214,13 @@ impl RegionSelectState {
             // Рисуем рамку
             context.set_source_rgba(1.0, 1.0, 1.0, 1.0);
             context.rectangle(x as f64, y as f64, w as f64, h as f64);
-            context.set_line_width(2.0);
+            context.set_line_width(0.5);
             context.stroke().ok();
 
             // Отображаем размеры
             let text = format!("{}x{}", w, h);
             context.set_source_rgba(1.0, 1.0, 1.0, 1.0);
-            context.set_font_size(24.0);
+            context.set_font_size(12.0);
             if let Ok(extents) = context.text_extents(&text) {
                 let text_x = x as f64 + (w as f64 / 2.0) - (extents.width() / 2.0);
                 let text_y = y as f64 + (h as f64 / 2.0) + (extents.height() / 2.0);
