@@ -13,8 +13,6 @@ use wayland_client::{
 use wayland_protocols_wlr::screencopy::v1::client::{
     zwlr_screencopy_frame_v1, zwlr_screencopy_manager_v1,
 };
-use image::DynamicImage;
-use image::ImageFormat;
 use image::codecs::png::PngEncoder;
 use image::codecs::jpeg::JpegEncoder;
 use image::codecs::bmp::BmpEncoder;
