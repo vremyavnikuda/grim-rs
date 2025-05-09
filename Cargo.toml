@@ -14,12 +14,20 @@ categories = ["command-line-utilities", "graphics", "os::unix-apis"]
 exclude = [".gitignore", ".github/", "target/", "examples/"]
 
 [dependencies]
-wayland-client = "0.31"
-wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
-wayland-protocols-wlr = { version = "0.3", features = ["client"] }
-image = "0.25"
-tempfile = "3.8"
+wayland-client = "0.31.1"
+wayland-protocols = { version = "0.31.0", features = ["client"] }
+wayland-protocols-wlr = { version = "0.2.0", features = ["client"] }
+wayland-cursor = "0.31.0"
+xkbcommon = "0.7.0"
+log = "0.4.20"
+env_logger = "0.10.1"
+image = "0.24.7"
+chrono = "0.4.34"
+tempfile = "3.10.1"
 libc = "0.2"
-log = "0.4"
-env_logger = "0.10"
-chrono = "0.4"
+smithay-client-toolkit = "0.16"
+cairo-rs = "0.18"
+tokio = { version = "1.36", features = ["full"] }
+
+[dev-dependencies]
+tempfile = "3.10.1"
