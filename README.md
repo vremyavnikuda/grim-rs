@@ -1,210 +1,188 @@
 # grim-rs
 
-**grim-rs** — это библиотека и CLI-утилита на Rust для создания скриншотов экрана в среде Wayland с использованием протокола `zwlr_screencopy_manager_v1`.  
-Она может использоваться как самостоятельная программа или как зависимость в других Rust-проектах.
+Pure Rust implementation of `grim` screenshot utility for Wayland compositors.
 
----
+## Features
 
-## Возможности
+- ✅ Pure Rust implementation - no external dependencies on C libraries
+- ✅ Native Wayland protocol support via `wayland-client`
+- ✅ Multiple output support
+- ✅ Region-based screenshot capture
+- ✅ PNG output format
+- ✅ Real screenshot capture (not mock data)
+- ✅ Correct color palette transformation
+- ✅ Zero external tool dependencies (no need for system `grim`)
 
-- Скриншот всего экрана в Wayland-сессии (Hyprland, Sway, Wayfire и др.)
-- Интерактивный выбор области экрана с помощью мыши
-- Отображение размеров выбранной области в реальном времени
-- Безопасная работа с памятью (Rust)
-- Поддержка форматов PNG, JPEG, BMP
-- Двойная буферизация для плавной отрисовки
-- Легко интегрируется в другие проекты (через функцию `capture_screenshot`)
-- Методы для сохранения изображения: `.save_as_png()`, `.save_as_jpeg()`, `.save_as_bmp()`
-- CLI-обёртка для быстрого использования из терминала
+## Usage
 
----
+### As a Library
 
-## Установка
+Add to your `Cargo.toml`:
 
-### Через Cargo
-
-```sh
-cargo add grim-rs
+```toml
+[dependencies]
+grim-rs = "0.1.0"
 ```
 
-### Сборка из исходников
+Basic usage:
 
-```sh
-git clone https://github.com/vremyavnikuda/grim-rs.git
+```rust
+use grim_rs::{Grim, Box};
+
+fn main() -> grim_rs::Result<()> {
+    let mut grim = Grim::new()?;
+    
+    // Capture entire screen
+    let data = grim.capture_all()?;
+    grim.save_png(&data, 1920, 1080, "screenshot.png")?;
+    
+    // Capture specific region
+    let region = Box::new(100, 100, 800, 600);
+    let data = grim.capture_region(region)?;
+    grim.save_png(&data, 800, 600, "region.png")?;
+    
+    // Capture specific output
+    let data = grim.capture_output("DP-1")?;
+    grim.save_png(&data, 1920, 1080, "output.png")?;
+    
+    Ok(())
+}
+```
+
+### Supported Wayland Protocols
+
+- `wl_shm` - Shared memory buffers
+- `zwlr_screencopy_manager_v1` - Screenshot capture (wlroots extension)
+- `wl_output` - Output information
+
+## Integration with hyprshot-rs
+
+This library is designed to replace the external `grim` dependency in `hyprshot-rs`. Here's how to integrate it:
+
+### 1. Add to Cargo.toml
+
+```toml
+[dependencies]
+grim-rs = { path = "../grim-rs" }
+```
+
+### 2. Update save.rs
+
+Replace the `grim` command calls with direct library usage:
+
+```rust
+use grim_rs::{Grim, Box as GrimBox};
+
+pub fn save_geometry_with_native_grim(
+    geometry: &str,
+    save_fullpath: &PathBuf,
+    // ... other parameters
+) -> Result<()> {
+    let mut grim = Grim::new().context("Failed to initialize grim-rs")?;
+    
+    // Parse geometry
+    let grim_geometry: GrimBox = geometry.parse()
+        .context("Failed to parse geometry")?;
+    
+    // Capture screenshot
+    let data = grim.capture_region(grim_geometry)?;
+    
+    if raw {
+        std::io::stdout().write_all(&data)?;
+        return Ok(());
+    }
+    
+    // Save to file
+    grim.save_png(&data, grim_geometry.width as u32, grim_geometry.height as u32, save_fullpath)?;
+    
+    // Copy to clipboard if needed
+    if !clipboard_only {
+        let png_data = grim.to_png(&data, grim_geometry.width as u32, grim_geometry.height as u32)?;
+        // Use wl-copy to copy to clipboard
+        // ... clipboard logic
+    }
+    
+    Ok(())
+}
+```
+
+### 3. Update Features
+
+Add a new feature to control the implementation:
+
+```toml
+[features]
+default = ["native-grim"]
+grim = []
+native-grim = ["grim-rs"]
+```
+
+## Comparison with Original grim
+
+| Feature | Original grim | grim-rs |
+|---------|---------------|---------|
+| Language | C | Rust |
+| Dependencies | libpng, pixman, wayland | Pure Rust crates |
+| Output formats | PNG, JPEG, PPM | PNG (extensible) |
+| Installation | System package | Rust crate |
+| Integration | External process | Library |
+| Memory safety | Manual | Guaranteed by Rust |
+| Color accuracy | ✅ | ✅ |
+| Real capture | ✅ | ✅ |
+
+## Architecture
+
+```
+┌─────────────────┐
+│   Application   │
+├─────────────────┤
+│    grim-rs      │
+├─────────────────┤
+│ wayland-client  │
+├─────────────────┤
+│    Wayland      │
+│   Compositor    │
+└─────────────────┘
+```
+
+### Key Components
+
+1. **Screenshot** - Main screenshot capture logic
+2. **Buffer** - Shared memory buffer management
+3. **Geometry** - Region and coordinate handling
+4. **Error** - Comprehensive error handling
+
+## Limitations
+
+- Currently supports PNG output only (JPEG and PPM can be added)
+- Requires wlroots-based compositor (Hyprland, Sway, etc.)
+- Linux-only (due to shared memory implementation)
+
+## Building
+
+```bash
 cd grim-rs
 cargo build --release
 ```
 
----
+## Testing
 
-## Использование как CLI
+```bash
+# Run tests
+cargo test
 
-```sh
-./target/release/grim-rs
+# Run example
+cargo run --example simple all screenshot.png
 ```
 
-- Скриншот будет сохранён в файл вида `YYYY-MM-DD_HH-MM-SS_grim-rs.png` в текущей директории.
-- Для подробного логирования используйте:
-  ```sh
-  RUST_LOG=info ./target/release/grim-rs
-  ```
+## Contributing
 
----
+1. Fork the repository
+2. Create a feature branch
+3. Make changes
+4. Add tests
+5. Submit a pull request
 
-## Использование как библиотеки
+## License
 
-Добавьте в `Cargo.toml`:
-
-```toml
-[dependencies]
-grim-rs = "0.1"
-```
-
-### Пример кода для создания скриншота всего экрана:
-
-```rust
-use grim_rs::{capture_screenshot, ScreenshotOptions, ScreenshotFormat};
-
-fn main() {
-    let options = ScreenshotOptions::default();
-    let image = capture_screenshot(options)
-        .expect("Failed to capture screenshot");
-    image.save_as_png("screenshot.png").unwrap();
-}
-```
-
-### Пример кода для создания скриншота выбранной области:
-
-```rust
-use grim_rs::{select_region_interactive_sctk, capture_screenshot, ScreenshotOptions};
-
-fn main() {
-    if let Some(region) = select_region_interactive_sctk() {
-        let options = ScreenshotOptions {
-            region: Some((
-                region.x as u32,
-                region.y as u32,
-                region.width as u32,
-                region.height as u32
-            )),
-            ..Default::default()
-        };
-        let image = capture_screenshot(options)
-            .expect("Failed to capture screenshot");
-        image.save_as_png("region.png").unwrap();
-    }
-}
-```
-
-### Пример использования generate_filename:
-
-```rust
-use grim_rs::{capture_screenshot, ScreenshotOptions, ScreenshotFormat, ScreenshotSaveExt};
-
-fn main() {
-    let options = ScreenshotOptions::default();
-    let image = capture_screenshot(options)
-        .expect("Failed to capture screenshot");
-    
-    // Генерация имени файла с текущей датой и временем
-    let filename = image.generate_filename(ScreenshotFormat::Png);
-    // Результат: "2024-03-14_15-30-45_grim-rs.png"
-    
-    // Сохранение сгенерированным именем
-    image.save_as_png(&filename).unwrap();
-}
-```
-
----
-
-## API
-
-### Основные структуры
-
-#### `ScreenshotOptions`
-Настройки для создания скриншота:
-- `output_name: Option<String>` — имя/идентификатор экрана (None для первого)
-- `region: Option<(u32, u32, u32, u32)>` — область (x, y, w, h) или None для всего экрана
-- `format: ScreenshotFormat` — формат (Png, Jpeg, Bmp)
-
-#### `Region`
-Выбранная область экрана:
-- `x: i32` — X-координата левого верхнего угла
-- `y: i32` — Y-координата левого верхнего угла
-- `width: i32` — ширина области
-- `height: i32` — высота области
-
-### Основные функции
-
-#### `capture_screenshot(options: ScreenshotOptions) -> Result<RgbaImage, ScreenshotError>`
-Создает скриншот с указанными параметрами.
-
-#### `select_region_interactive_sctk() -> Option<Region>`
-Интерактивно выбирает область экрана с помощью мыши.
-
-#### `get_screen_dimensions() -> Result<(u32, u32), ScreenshotError>`
-Получает размеры основного экрана.
-
-### Трейты расширения
-
-#### `ScreenshotSaveExt`
-Методы для сохранения изображений:
-- `.save_as_png(path)` — сохранить как PNG
-- `.save_as_jpeg(path)` — сохранить как JPEG
-- `.save_as_bmp(path)` — сохранить как BMP
-- `.generate_filename(format)` — сгенерировать имя файла
-
----
-
-## Зависимости
-
-### Основные
-- wayland-client — для работы с Wayland
-- wayland-protocols-wlr — для поддержки протоколов WLR
-- image — для работы с изображениями
-- cairo — для отрисовки интерфейса выбора области
-- smithay-client-toolkit — для работы с Wayland композитором
-
-### Дополнительные
-- tempfile — для создания временных файлов
-- log — для логирования
-- env_logger — для настройки логирования
-- chrono — для работы с датами и временем
-
----
-
-## Особенности реализации
-
-### Двойная буферизация
-Используется для плавной отрисовки рамки выбора области и предотвращения мерцания.
-
-### Асинхронная обработка событий
-Обеспечивает отзывчивость интерфейса при выборе области.
-
-### Безопасная работа с памятью
-- RAII для управления ресурсами
-- Безопасные указатели
-- Проверки границ массивов
-
----
-
-## Рекомендации по использованию
-
-1. Всегда обрабатывайте возможные ошибки при создании скриншотов
-2. Используйте логирование для отладки (RUST_LOG=info)
-3. При работе с большими областями экрана учитывайте возможные задержки
-4. Для лучшей производительности используйте формат PNG
-5. При выборе области используйте левую кнопку мыши для начала выбора и отпустите для завершения
-6. Для отмены выбора нажмите клавишу Escape
-
----
-
-## Лицензия
-
-MIT
-
----
-
-## Авторы
-
-- [Andrew Nevsky](https://github.com/vremayvnikuda) 
+MIT License - see LICENSE file for details.
