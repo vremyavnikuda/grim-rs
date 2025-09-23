@@ -10,7 +10,7 @@ repository = "https://github.com/vremyavnikuda/grim-rs"
 documentation = "https://docs.rs/grim-rs"
 homepage = "https://github.com/vremyavnikuda/grim-rs"
 readme = "README.md"
-exclude = ["/examples", "/target", ".gitignore", "todo.md", "grim.md"]
+exclude = ["/target", ".gitignore", "todo.md", "grim.md"]
 authors = ["vremyavnikuda <hopperplayer0@gmail.com>"]
 
 [lib]
