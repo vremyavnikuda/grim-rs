@@ -19,12 +19,10 @@
 //! ```no_run
 //! use grim_rs::Grim;
 //!
-//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let mut grim = Grim::new()?;
 //! let result = grim.capture_all()?;
 //! grim.save_png(&result.data, result.width, result.height, "screenshot.png")?;
-//! # Ok(())
-//! # }
+//! # Ok::<(), grim_rs::Error>(())
 //! ```
 
 pub mod error;
@@ -150,15 +148,13 @@ impl Grim {
     /// ```no_run
     /// use grim_rs::Grim;
     ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut grim = Grim::new()?;
     /// let outputs = grim.get_outputs()?;
     ///
     /// for output in outputs {
     ///     println!("Output: {} ({}x{})", output.name, output.geometry.width, output.geometry.height);
     /// }
-    /// # Ok(())
-    /// # }
+    /// # Ok::<(), grim_rs::Error>(())
     /// ```
     pub fn get_outputs(&mut self) -> Result<Vec<Output>> {
         self.platform_capture.get_outputs()
@@ -181,12 +177,10 @@ impl Grim {
     /// ```no_run
     /// use grim_rs::Grim;
     ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
     /// println!("Captured screen: {}x{}", result.width, result.height);
-    /// # Ok(())
-    /// # }
+    /// # Ok::<(), grim_rs::Error>(())
     /// ```
     pub fn capture_all(&mut self) -> Result<CaptureResult> {
         self.platform_capture.capture_all()
@@ -212,12 +206,10 @@ impl Grim {
     /// ```no_run
     /// use grim_rs::Grim;
     ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_output("eDP-1")?;
     /// println!("Captured output: {}x{}", result.width, result.height);
-    /// # Ok(())
-    /// # }
+    /// # Ok::<(), grim_rs::Error>(())
     /// ```
     pub fn capture_output(&mut self, output_name: &str) -> Result<CaptureResult> {
         self.platform_capture.capture_output(output_name)
@@ -243,13 +235,11 @@ impl Grim {
     /// ```no_run
     /// use grim_rs::{Grim, Box};
     ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut grim = Grim::new()?;
     /// let region = Box::new(100, 100, 800, 600); // x=100, y=100, width=800, height=600
     /// let result = grim.capture_region(region)?;
     /// println!("Captured region: {}x{}", result.width, result.height);
-    /// # Ok(())
-    /// # }
+    /// # Ok::<(), grim_rs::Error>(())
     /// ```
     pub fn capture_region(&mut self, region: Box) -> Result<CaptureResult> {
         self.platform_capture.capture_region(region)
@@ -278,7 +268,6 @@ impl Grim {
     /// ```no_run
     /// use grim_rs::{Grim, CaptureParameters, Box};
     ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut grim = Grim::new()?;
     ///
     /// // Get available outputs
@@ -306,8 +295,7 @@ impl Grim {
     /// // Capture all specified outputs
     /// let results = grim.capture_outputs(parameters)?;
     /// println!("Captured {} outputs", results.outputs.len());
-    /// # Ok(())
-    /// # }
+    /// # Ok::<(), grim_rs::Error>(())
     /// ```
     pub fn capture_outputs(&mut self, parameters: Vec<CaptureParameters>) -> Result<MultiOutputCaptureResult> {
         self.platform_capture.capture_outputs(parameters)
@@ -335,12 +323,10 @@ impl Grim {
     /// ```no_run
     /// use grim_rs::Grim;
     ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
     /// grim.save_png(&result.data, result.width, result.height, "screenshot.png")?;
-    /// # Ok(())
-    /// # }
+    /// # Ok::<(), grim_rs::Error>(())
     /// ```
     pub fn save_png<P: AsRef<std::path::Path>>(&self, data: &[u8], width: u32, height: u32, path: P) -> Result<()> {
         use image::{ImageBuffer, Rgba};
@@ -381,12 +367,10 @@ impl Grim {
     /// ```no_run
     /// use grim_rs::Grim;
     ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
     /// grim.save_jpeg(&result.data, result.width, result.height, "screenshot.jpg")?;
-    /// # Ok(())
-    /// # }
+    /// # Ok::<(), grim_rs::Error>(())
     /// ```
     #[cfg(feature = "jpeg")]
     pub fn save_jpeg<P: AsRef<std::path::Path>>(&self, data: &[u8], width: u32, height: u32, path: P) -> Result<()> {
@@ -450,13 +434,11 @@ impl Grim {
     /// ```no_run
     /// use grim_rs::Grim;
     ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
     /// let jpeg_bytes = grim.to_jpeg(&result.data, result.width, result.height)?;
     /// println!("JPEG data size: {} bytes", jpeg_bytes.len());
-    /// # Ok(())
-    /// # }
+    /// # Ok::<(), grim_rs::Error>(())
     /// ```
     #[cfg(feature = "jpeg")]
     pub fn to_jpeg(&self, data: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
@@ -518,13 +500,11 @@ impl Grim {
     /// ```no_run
     /// use grim_rs::Grim;
     ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
     /// let png_bytes = grim.to_png(&result.data, result.width, result.height)?;
     /// println!("PNG data size: {} bytes", png_bytes.len());
-    /// # Ok(())
-    /// # }
+    /// # Ok::<(), grim_rs::Error>(())
     /// ```
     pub fn to_png(&self, data: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
         use image::{ImageBuffer, Rgba};
