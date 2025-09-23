@@ -18,6 +18,9 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::os::fd::{AsRawFd, BorrowedFd};
 
+// Максимальное количества попыток ожидания событий
+const MAX_ATTEMPTS: usize = 100;
+
 struct OutputInfo {
     name: String,
     width: i32,
@@ -91,7 +94,7 @@ impl WaylandCapture {
         
         let mut outputs = Vec::new();
         
-        for info in self.globals.output_info.values() {
+        for (_id, info) in &self.globals.output_info {
             outputs.push(Output {
                 name: info.name.clone(),
                 geometry: Box::new(info.x, info.y, info.width, info.height),
@@ -149,20 +152,16 @@ impl WaylandCapture {
     }
 
     pub fn capture_region(&mut self, region: Box) -> Result<CaptureResult> {
-        eprintln!("Начинаем захват области: {:?}", region);
-        
         // Проверяем, что у нас есть хотя бы один выход
-        let output = self.globals.outputs.first().ok_or(Error::NoOutputs)?;
-        eprintln!("Найден выход для захвата");
+        let output = self.globals.outputs.first()
+            .ok_or_else(|| Error::NoOutputs)?;
         
         let screencopy_manager = self.globals.screencopy_manager.as_ref().ok_or(
             Error::UnsupportedProtocol("zwlr_screencopy_manager_v1 not available".to_string())
         )?;
-        eprintln!("Найден screencopy manager");
 
         let mut event_queue = self._connection.new_event_queue();
         let qh = event_queue.handle();
-        eprintln!("Создана очередь событий");
 
         // Состояние для обработки фрейма
         let frame_state = Arc::new(Mutex::new(FrameState {
@@ -172,7 +171,6 @@ impl WaylandCapture {
             format: None,
             ready: false,
         }));
-        eprintln!("Создано состояние фрейма");
 
         // Создаем фрейм для захвата области
         let frame = screencopy_manager.capture_output_region(
@@ -185,21 +183,27 @@ impl WaylandCapture {
             &qh,
             frame_state.clone()
         );
-        eprintln!("Создан фрейм для захвата области");
 
-        // Ждем события Buffer от фрейма
-        eprintln!("Начинаем ожидание события Buffer...");
+        // Ждем события Buffer от фрейма с таймаутом
+        let mut attempts = 0;
+        
         loop {
             {
                 let state = frame_state.lock().unwrap();
                 if state.buffer.is_some() || state.ready {
-                    eprintln!("Получено событие Buffer или завершение, buffer.is_some()={}, ready={}", state.buffer.is_some(), state.ready);
                     break;
                 }
             }
-            eprintln!("Ожидание события Buffer...");
+            
+            // Проверяем, не превысили ли мы максимальное количество попыток
+            if attempts >= MAX_ATTEMPTS {
+                return Err(Error::FrameCapture("Timeout waiting for frame buffer".to_string()));
+            }
+            
             event_queue.blocking_dispatch(self)
                 .map_err(|e| Error::FrameCapture(format!("Failed to dispatch frame events: {}", e)))?;
+            
+            attempts += 1;
         }
 
         // Если буфер не был получен, но фрейм завершен, это ошибка
@@ -210,7 +214,6 @@ impl WaylandCapture {
             }
         }
         
-        eprintln!("Создаем буфер через wl_shm");
         // Создаем буфер через wl_shm
         let (width, height, stride, size) = {
             let state = frame_state.lock().unwrap();
@@ -223,13 +226,13 @@ impl WaylandCapture {
         
         // Создаем временный файл для буфера
         let mut tmp_file = tempfile::NamedTempFile::new()
-            .map_err(|_| Error::BufferCreation)?;
+            .map_err(|_e| Error::BufferCreation)?;
         tmp_file.as_file_mut().set_len(size as u64)
-            .map_err(|_| Error::BufferCreation)?;
+            .map_err(|_e| Error::BufferCreation)?;
         
         // Отображаем файл в память
         let mmap = unsafe { memmap2::MmapMut::map_mut(&tmp_file)
-            .map_err(|_| Error::BufferCreation)?
+            .map_err(|_e| Error::BufferCreation)?
         };
         
         // Создаем wl_shm_pool и буфер (получаем shm внутри этого блока)
@@ -237,7 +240,6 @@ impl WaylandCapture {
             let shm = self.globals.shm.as_ref().ok_or(
                 Error::UnsupportedProtocol("wl_shm not available".to_string())
             )?;
-            eprintln!("Найден shm");
             
             // Получаем формат из состояния фрейма
             let format = {
@@ -257,18 +259,26 @@ impl WaylandCapture {
             frame.copy(&buffer);
         }
         
-        // Ждем завершения захвата
-        eprintln!("Ждем завершения захвата...");
+        // Ждем завершения захвата с таймаутом
+        let mut attempts = 0;
+        
         loop {
             {
                 let state = frame_state.lock().unwrap();
                 if state.ready {
-                    eprintln!("Захват завершен, ready={}", state.ready);
                     break;
                 }
             }
+            
+            // Проверяем, не превысили ли мы максимальное количество попыток
+            if attempts >= MAX_ATTEMPTS {
+                return Err(Error::FrameCapture("Timeout waiting for frame capture completion".to_string()));
+            }
+            
             event_queue.blocking_dispatch(self)
                 .map_err(|e| Error::FrameCapture(format!("Failed to dispatch frame events: {}", e)))?;
+            
+            attempts += 1;
         }
         
         // Читаем данные из отображенного файла
@@ -281,7 +291,6 @@ impl WaylandCapture {
         } {
             match format {
                 ShmFormat::Xrgb8888 => {
-                    eprintln!("Преобразуем данные из XRGB8888 в RGBA8888");
                     for chunk in buffer_data.chunks_exact_mut(4) {
                         let b = chunk[0]; // Синий
                         let g = chunk[1]; // Зеленый
@@ -293,19 +302,14 @@ impl WaylandCapture {
                     }
                 }
                 ShmFormat::Argb8888 => {
-                    eprintln!("Данные уже в формате ARGB8888");
                     // Ничего не делаем, формат уже правильный
                 }
                 _ => {
-                    eprintln!("Неизвестный формат пикселей: {:?}", format);
+                    // Неизвестный формат пикселей
                 }
             }
         }
-        
-        eprintln!("Завершено ожидание событий фрейма");
 
-        // Конвертируем буфер в нужный формат (если необходимо)
-        // Для простоты предполагаем, что формат уже RGBA
         Ok(CaptureResult {
             data: buffer_data,
             width,
@@ -339,10 +343,12 @@ impl Dispatch<WlRegistry, ()> for WaylandCapture {
                 }
                 "wl_output" => {
                     let output = registry.bind::<WlOutput, _, _>(name, version, qh, ());
+                    // Добавляем информацию о выходе с временными значениями
+                    // Реальные значения будут получены позже через события wl_output
                     state.globals.output_info.insert(name, OutputInfo {
                         name: format!("output-{}", name),
-                        width: 1920,
-                        height: 1080,
+                        width: 0,
+                        height: 0,
                         x: 0,
                         y: 0,
                         scale: 1,
@@ -359,7 +365,7 @@ impl Dispatch<WlRegistry, ()> for WaylandCapture {
 impl Dispatch<WlOutput, ()> for WaylandCapture {
     fn event(
         state: &mut Self,
-        _output: &WlOutput,
+        output: &WlOutput,
         event: <WlOutput as Proxy>::Event,
         _: &(),
         _conn: &Connection,
@@ -367,8 +373,10 @@ impl Dispatch<WlOutput, ()> for WaylandCapture {
     ) {
         use wayland_client::protocol::wl_output::{Event};
         
-        // Находим OutputInfo для этого выхода по ссылке на объект
-        // В данном случае мы используем упрощенный подход
+        // Находим соответствующий OutputInfo для этого выхода
+        // Мы используем ID объекта для сопоставления
+        let output_id = output.id().protocol_id();
+        
         match event {
             Event::Geometry { 
                 x, y, 
@@ -379,8 +387,8 @@ impl Dispatch<WlOutput, ()> for WaylandCapture {
                 model: _, 
                 transform: _ 
             } => {
-                // Обновляем координаты для всех выходов (упрощенный подход)
-                for (_, info) in state.globals.output_info.iter_mut() {
+                // Обновляем координаты для конкретного выхода
+                if let Some(info) = state.globals.output_info.get_mut(&output_id) {
                     info.x = x;
                     info.y = y;
                 }
@@ -391,21 +399,21 @@ impl Dispatch<WlOutput, ()> for WaylandCapture {
                 height, 
                 refresh: _ 
             } => {
-                // Обновляем размеры для всех выходов (упрощенный подход)
-                for (_, info) in state.globals.output_info.iter_mut() {
+                // Обновляем размеры для конкретного выхода
+                if let Some(info) = state.globals.output_info.get_mut(&output_id) {
                     info.width = width;
                     info.height = height;
                 }
             }
             Event::Scale { factor } => {
-                // Обновляем масштаб для всех выходов (упрощенный подход)
-                for (_, info) in state.globals.output_info.iter_mut() {
+                // Обновляем масштаб для конкретного выхода
+                if let Some(info) = state.globals.output_info.get_mut(&output_id) {
                     info.scale = factor;
                 }
             }
             Event::Name { name } => {
-                // Обновляем имя для всех выходов (упрощенный подход)
-                for (_, info) in state.globals.output_info.iter_mut() {
+                // Обновляем имя для конкретного выхода
+                if let Some(info) = state.globals.output_info.get_mut(&output_id) {
                     info.name = name.clone();
                 }
             }
@@ -466,7 +474,6 @@ impl Dispatch<ZwlrScreencopyFrameV1, Arc<Mutex<FrameState>>> for WaylandCapture 
         
         match event {
             Event::Buffer { format, width, height, stride } => {
-                eprintln!("Получено событие Buffer: format={:?}, width={}, height={}, stride={}", format, width, height, stride);
                 let mut state = frame_state.lock().unwrap();
                 state.width = width;
                 state.height = height;
@@ -476,29 +483,27 @@ impl Dispatch<ZwlrScreencopyFrameV1, Arc<Mutex<FrameState>>> for WaylandCapture 
                 }
                 state.buffer = Some(vec![0u8; (stride * height) as usize]);
             }
-            Event::Flags { flags } => {
-                eprintln!("Получено событие Flags: flags={:?}", flags);
+            Event::Flags { .. } => {
+                // Обработка флагов
             }
-            Event::Ready { tv_sec_hi, tv_sec_lo, tv_nsec } => {
-                eprintln!("Получено событие Ready: tv_sec_hi={}, tv_sec_lo={}, tv_nsec={}", tv_sec_hi, tv_sec_lo, tv_nsec);
+            Event::Ready { .. } => {
                 let mut state = frame_state.lock().unwrap();
                 state.ready = true;
                 frame.destroy();
             }
             Event::Failed => {
-                eprintln!("Получено событие Failed");
                 // Обработка ошибки
                 let mut state = frame_state.lock().unwrap();
                 state.ready = true;
             }
-            Event::LinuxDmabuf { format, width, height } => {
-                eprintln!("Получено событие LinuxDmabuf: format={}, width={}, height={}", format, width, height);
+            Event::LinuxDmabuf { .. } => {
+                // Обработка LinuxDmabuf
             }
             Event::BufferDone => {
-                eprintln!("Получено событие BufferDone");
+                // Обработка BufferDone
             }
             _ => {
-                eprintln!("Получено неизвестное событие: {:?}", event);
+                // Обработка неизвестных событий
             }
         }
     }
