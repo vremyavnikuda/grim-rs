@@ -191,6 +191,10 @@ impl WaylandCapture {
             {
                 let state = frame_state.lock().unwrap();
                 if state.buffer.is_some() || state.ready {
+                    // Если фрейм готов, но буфер не получен, это ошибка
+                    if state.ready && state.buffer.is_none() {
+                        return Err(Error::FrameCapture("Frame is ready but buffer was not received".to_string()));
+                    }
                     break;
                 }
             }
@@ -266,6 +270,10 @@ impl WaylandCapture {
             {
                 let state = frame_state.lock().unwrap();
                 if state.ready {
+                    // Проверяем, что буфер был успешно получен
+                    if state.buffer.is_none() {
+                        return Err(Error::FrameCapture("Frame is ready but buffer was not received".to_string()));
+                    }
                     break;
                 }
             }
@@ -483,10 +491,12 @@ impl Dispatch<ZwlrScreencopyFrameV1, Arc<Mutex<FrameState>>> for WaylandCapture 
                 }
                 state.buffer = Some(vec![0u8; (stride * height) as usize]);
             }
-            Event::Flags { .. } => {
-                // Обработка флагов
+            Event::Flags { flags } => {
+                // Обработка флагов - можно использовать для дополнительной информации
+                // Пока просто логируем для отладки
+                log::debug!("Received flags: {:?}", flags);
             }
-            Event::Ready { .. } => {
+            Event::Ready { tv_sec_hi: _, tv_sec_lo: _, tv_nsec: _ } => {
                 let mut state = frame_state.lock().unwrap();
                 state.ready = true;
                 frame.destroy();
@@ -496,14 +506,18 @@ impl Dispatch<ZwlrScreencopyFrameV1, Arc<Mutex<FrameState>>> for WaylandCapture 
                 let mut state = frame_state.lock().unwrap();
                 state.ready = true;
             }
-            Event::LinuxDmabuf { .. } => {
-                // Обработка LinuxDmabuf
+            Event::LinuxDmabuf { format, width, height } => {
+                // Обработка LinuxDmabuf - альтернативный способ передачи данных
+                // Пока не поддерживаем, но логируем для отладки
+                log::debug!("Received LinuxDmabuf: format={}, width={}, height={}", format, width, height);
             }
             Event::BufferDone => {
-                // Обработка BufferDone
+                // BufferDone означает, что буфер был успешно скопирован
+                log::debug!("Buffer copy completed");
             }
             _ => {
                 // Обработка неизвестных событий
+                log::warn!("Received unknown event: {:?}", event);
             }
         }
     }

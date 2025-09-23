@@ -20,6 +20,7 @@ wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
 wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 memmap2 = "0.9"
 tempfile = "3.10"
+log = "0.4"
 
 [dev-dependencies]
 env_logger = "0.10"

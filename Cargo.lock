@@ -367,6 +367,7 @@ dependencies = [
  "anyhow",
  "env_logger",
  "image",
+ "log",
  "memmap2",
  "tempfile",
  "thiserror",
