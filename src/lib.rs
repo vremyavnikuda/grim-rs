@@ -22,6 +22,24 @@ pub struct Output {
     pub scale: i32,
 }
 
+/// Parameters for capturing a specific output
+#[derive(Debug, Clone)]
+pub struct CaptureParameters {
+    /// Name of the output to capture
+    pub output_name: String,
+    /// Optional region within the output to capture (None means entire output)
+    pub region: Option<Box>,
+    /// Whether to include the cursor in the capture
+    pub overlay_cursor: bool,
+}
+
+/// Result of capturing multiple outputs
+#[derive(Debug, Clone)]
+pub struct MultiOutputCaptureResult {
+    /// Map of output names to their capture results
+    pub outputs: std::collections::HashMap<String, CaptureResult>,
+}
+
 /// Main interface for taking screenshots
 pub struct Grim {
     platform_capture: PlatformCapture,
@@ -52,6 +70,11 @@ impl Grim {
     /// Capture specific region
     pub fn capture_region(&mut self, region: Box) -> Result<CaptureResult> {
         self.platform_capture.capture_region(region)
+    }
+
+    /// Capture multiple outputs with different parameters
+    pub fn capture_outputs(&mut self, parameters: Vec<CaptureParameters>) -> Result<MultiOutputCaptureResult> {
+        self.platform_capture.capture_outputs(parameters)
     }
 
     /// Save captured data as PNG
@@ -179,8 +202,7 @@ mod tests {
     #[cfg(feature = "png")]
     fn test_to_png() {
         let grim = Grim::new().unwrap();
-        // Create a small test image (4x4 pixels, 4 channels = 64 bytes)
-        let test_data = vec![255u8; 64]; // 4x4 pixels, 4 channels each
+        let test_data = vec![255u8; 64];
         let png_data = grim.to_png(&test_data, 4, 4).unwrap();
         assert!(!png_data.is_empty());
     }
@@ -189,8 +211,7 @@ mod tests {
     #[cfg(feature = "jpeg")]
     fn test_to_jpeg() {
         let grim = Grim::new().unwrap();
-        // Create a small test image (4x4 pixels, 4 channels = 64 bytes)
-        let test_data = vec![255u8; 64]; // 4x4 pixels, 4 channels each
+        let test_data = vec![255u8; 64];
         let jpeg_data = grim.to_jpeg(&test_data, 4, 4).unwrap();
         assert!(!jpeg_data.is_empty());
     }
@@ -199,7 +220,7 @@ mod tests {
     #[cfg(not(feature = "jpeg"))]
     fn test_jpeg_disabled() {
         let grim = Grim::new().unwrap();
-        let test_data = vec![255u8; 16]; // 4x4 pixels, 4 channels each
+        let test_data = vec![255u8; 16];
         let jpeg_result = grim.to_jpeg(&test_data, 4, 4);
         assert!(jpeg_result.is_err());
     }

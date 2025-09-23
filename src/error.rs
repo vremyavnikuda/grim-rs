@@ -11,6 +11,9 @@ pub enum Error {
     #[error("Output not found: {0}")]
     OutputNotFound(String),
     
+    #[error("Invalid capture region: {0}")]
+    InvalidRegion(String),
+    
     #[error("Screenshot capture failed")]
     CaptureFailed,
     

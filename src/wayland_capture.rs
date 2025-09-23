@@ -1,4 +1,4 @@
-use crate::{CaptureResult, Output, Box, Result, Error};
+use crate::{CaptureResult, Output, Box, Result, Error, CaptureParameters, MultiOutputCaptureResult};
 use wayland_client::{
     Connection, Dispatch, QueueHandle, Proxy,
     protocol::{
@@ -18,7 +18,6 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::os::fd::{AsRawFd, BorrowedFd};
 
-// Максимальное количества попыток ожидания событий
 const MAX_ATTEMPTS: usize = 100;
 
 struct OutputInfo {
@@ -47,7 +46,6 @@ impl WaylandCapture {
     pub fn new() -> Result<Self> {
         let connection = Connection::connect_to_env()
             .map_err(|e| Error::WaylandConnection(format!("Failed to connect to Wayland: {}", e)))?;
-
         let globals = WaylandGlobals {
             compositor: None,
             shm: None,
@@ -55,45 +53,31 @@ impl WaylandCapture {
             outputs: Vec::new(),
             output_info: HashMap::new(),
         };
-
         let mut event_queue = connection.new_event_queue();
         let qh = event_queue.handle();
-
         let _registry = connection.display().get_registry(&qh, ());
-        
-        // Создаем временный экземпляр для инициализации
         let mut instance = Self {
             _connection: connection,
             globals,
         };
-
         event_queue.roundtrip(&mut instance).map_err(|e| {
             Error::WaylandConnection(format!("Failed to initialize Wayland globals: {}", e))
         })?;
-
-        // Проверяем, что все необходимые глобальные объекты доступны
         if instance.globals.screencopy_manager.is_none() {
             return Err(Error::UnsupportedProtocol("zwlr_screencopy_manager_v1 not available".to_string()));
         }
-        
         if instance.globals.shm.is_none() {
             return Err(Error::UnsupportedProtocol("wl_shm not available".to_string()));
         }
-
         Ok(instance)
     }
 
     pub fn get_outputs(&mut self) -> Result<Vec<Output>> {
-        // Обновляем информацию о выходах
         let mut event_queue = self._connection.new_event_queue();
-        
-        // Диспетчеризуем события для получения актуальной информации о выходах
         event_queue.roundtrip(self).map_err(|e| {
             Error::WaylandConnection(format!("Failed to get output information: {}", e))
         })?;
-        
         let mut outputs = Vec::new();
-        
         for (_id, info) in &self.globals.output_info {
             outputs.push(Output {
                 name: info.name.clone(),
@@ -101,41 +85,32 @@ impl WaylandCapture {
                 scale: info.scale,
             });
         }
-
         if outputs.is_empty() {
             return Err(Error::NoOutputs);
         }
-
         Ok(outputs)
     }
 
     pub fn capture_all(&mut self) -> Result<CaptureResult> {
-        // Получаем информацию о всех выходах
         let outputs = self.get_outputs()?;
-        
-        // Находим общий bounding box для всех выходов
         if outputs.is_empty() {
             return Err(Error::NoOutputs);
         }
-        
         let mut min_x = outputs[0].geometry.x;
         let mut min_y = outputs[0].geometry.y;
         let mut max_x = outputs[0].geometry.x + outputs[0].geometry.width;
         let mut max_y = outputs[0].geometry.y + outputs[0].geometry.height;
-        
         for output in &outputs {
             min_x = min_x.min(output.geometry.x);
             min_y = min_y.min(output.geometry.y);
             max_x = max_x.max(output.geometry.x + output.geometry.width);
             max_y = max_y.max(output.geometry.y + output.geometry.height);
         }
-        
         let region = Box::new(min_x, min_y, max_x - min_x, max_y - min_y);
         self.capture_region(region)
     }
 
     pub fn capture_output(&mut self, output_name: &str) -> Result<CaptureResult> {
-        // Находим выход по имени
         let output_info = self.globals.output_info.iter()
             .find(|(_, info)| info.name == output_name)
             .map(|(_, info)| info)
@@ -147,23 +122,18 @@ impl WaylandCapture {
             output_info.width,
             output_info.height
         );
-        
         self.capture_region(region)
     }
 
     pub fn capture_region(&mut self, region: Box) -> Result<CaptureResult> {
-        // Проверяем, что у нас есть хотя бы один выход
         let output = self.globals.outputs.first()
             .ok_or_else(|| Error::NoOutputs)?;
         
         let screencopy_manager = self.globals.screencopy_manager.as_ref().ok_or(
             Error::UnsupportedProtocol("zwlr_screencopy_manager_v1 not available".to_string())
         )?;
-
         let mut event_queue = self._connection.new_event_queue();
         let qh = event_queue.handle();
-
-        // Состояние для обработки фрейма
         let frame_state = Arc::new(Mutex::new(FrameState {
             buffer: None,
             width: 0,
@@ -171,10 +141,8 @@ impl WaylandCapture {
             format: None,
             ready: false,
         }));
-
-        // Создаем фрейм для захвата области
         let frame = screencopy_manager.capture_output_region(
-            0, // overlay_cursor
+            0,
             output,
             region.x,
             region.y,
@@ -183,74 +151,54 @@ impl WaylandCapture {
             &qh,
             frame_state.clone()
         );
-
-        // Ждем события Buffer от фрейма с таймаутом
         let mut attempts = 0;
-        
         loop {
             {
                 let state = frame_state.lock().unwrap();
                 if state.buffer.is_some() || state.ready {
-                    // Если фрейм готов, но буфер не получен, это ошибка
                     if state.ready && state.buffer.is_none() {
                         return Err(Error::FrameCapture("Frame is ready but buffer was not received".to_string()));
                     }
                     break;
                 }
             }
-            
-            // Проверяем, не превысили ли мы максимальное количество попыток
             if attempts >= MAX_ATTEMPTS {
                 return Err(Error::FrameCapture("Timeout waiting for frame buffer".to_string()));
             }
-            
             event_queue.blocking_dispatch(self)
                 .map_err(|e| Error::FrameCapture(format!("Failed to dispatch frame events: {}", e)))?;
             
             attempts += 1;
         }
-
-        // Если буфер не был получен, но фрейм завершен, это ошибка
         {
             let state = frame_state.lock().unwrap();
             if state.buffer.is_none() {
                 return Err(Error::CaptureFailed);
             }
         }
-        
-        // Создаем буфер через wl_shm
         let (width, height, stride, size) = {
             let state = frame_state.lock().unwrap();
             let width = state.width;
             let height = state.height;
-            let stride = width * 4; // Для RGBA формата
+            let stride = width * 4;
             let size = (stride * height) as usize;
             (width, height, stride, size)
         };
-        
-        // Создаем временный файл для буфера
         let mut tmp_file = tempfile::NamedTempFile::new()
             .map_err(|_e| Error::BufferCreation)?;
         tmp_file.as_file_mut().set_len(size as u64)
             .map_err(|_e| Error::BufferCreation)?;
-        
-        // Отображаем файл в память
         let mmap = unsafe { memmap2::MmapMut::map_mut(&tmp_file)
             .map_err(|_e| Error::BufferCreation)?
         };
-        
-        // Создаем wl_shm_pool и буфер (получаем shm внутри этого блока)
         {
             let shm = self.globals.shm.as_ref().ok_or(
                 Error::UnsupportedProtocol("wl_shm not available".to_string())
             )?;
-            
-            // Получаем формат из состояния фрейма
             let format = {
                 let state = frame_state.lock().unwrap();
-                state.format.unwrap_or(ShmFormat::Xrgb8888) // По умолчанию Xrgb8888
+                state.format.unwrap_or(ShmFormat::Xrgb8888)
             };
-            
             let pool = shm.create_pool(
                 unsafe { BorrowedFd::borrow_raw(tmp_file.as_file().as_raw_fd()) },
                 size as i32,
@@ -258,41 +206,27 @@ impl WaylandCapture {
                 ()
             );
             let buffer = pool.create_buffer(0, width as i32, height as i32, stride as i32, format, &qh, ());
-            
-            // Передаем буфер фрейму
             frame.copy(&buffer);
         }
-        
-        // Ждем завершения захвата с таймаутом
         let mut attempts = 0;
-        
         loop {
             {
                 let state = frame_state.lock().unwrap();
                 if state.ready {
-                    // Проверяем, что буфер был успешно получен
                     if state.buffer.is_none() {
                         return Err(Error::FrameCapture("Frame is ready but buffer was not received".to_string()));
                     }
                     break;
                 }
             }
-            
-            // Проверяем, не превысили ли мы максимальное количество попыток
             if attempts >= MAX_ATTEMPTS {
                 return Err(Error::FrameCapture("Timeout waiting for frame capture completion".to_string()));
             }
-            
             event_queue.blocking_dispatch(self)
                 .map_err(|e| Error::FrameCapture(format!("Failed to dispatch frame events: {}", e)))?;
-            
             attempts += 1;
         }
-        
-        // Читаем данные из отображенного файла
         let mut buffer_data = mmap.to_vec();
-        
-        // Преобразуем данные из формата XRGB8888 в RGBA8888 если нужно
         if let Some(format) = {
             let state = frame_state.lock().unwrap();
             state.format
@@ -300,33 +234,197 @@ impl WaylandCapture {
             match format {
                 ShmFormat::Xrgb8888 => {
                     for chunk in buffer_data.chunks_exact_mut(4) {
-                        let b = chunk[0]; // Синий
-                        let g = chunk[1]; // Зеленый
-                        let r = chunk[2]; // Красный
-                        chunk[0] = r; // R
-                        chunk[1] = g; // G
-                        chunk[2] = b; // B
-                        chunk[3] = 255; // A
+                        let b = chunk[0];
+                        let g = chunk[1];
+                        let r = chunk[2];
+                        chunk[0] = r;
+                        chunk[1] = g;
+                        chunk[2] = b;
+                        chunk[3] = 255;
                     }
                 }
-                ShmFormat::Argb8888 => {
-                    // Ничего не делаем, формат уже правильный
-                }
-                _ => {
-                    // Неизвестный формат пикселей
-                }
+                ShmFormat::Argb8888 => {}
+                _ => {}
             }
         }
-
         Ok(CaptureResult {
             data: buffer_data,
             width,
             height,
         })
     }
+
+    pub fn capture_outputs(&mut self, parameters: Vec<CaptureParameters>) -> Result<MultiOutputCaptureResult> {
+        let output = self.globals.outputs.first()
+            .ok_or_else(|| Error::NoOutputs)?;
+        let screencopy_manager = self.globals.screencopy_manager.as_ref().ok_or(
+            Error::UnsupportedProtocol("zwlr_screencopy_manager_v1 not available".to_string())
+        )?;
+        let mut event_queue = self._connection.new_event_queue();
+        let qh = event_queue.handle();
+        let mut frame_states: HashMap<String, Arc<Mutex<FrameState>>> = HashMap::new();
+        let mut frames: HashMap<String, ZwlrScreencopyFrameV1> = HashMap::new();
+        for param in &parameters {
+            let output_info = self.globals.output_info.iter()
+                .find(|(_, info)| info.name == param.output_name)
+                .map(|(_, info)| info)
+                .ok_or_else(|| Error::OutputNotFound(param.output_name.clone()))?;
+            let region = if let Some(region) = param.region {
+                let output_right = output_info.x + output_info.width;
+                let output_bottom = output_info.y + output_info.height;
+                if region.x < output_info.x || region.y < output_info.y || 
+                   region.x + region.width > output_right || region.y + region.height > output_bottom {
+                    return Err(Error::InvalidRegion("Capture region extends outside output boundaries".to_string()));
+                }
+                region
+            } else {
+                Box::new(output_info.x, output_info.y, output_info.width, output_info.height)
+            };
+            let frame_state = Arc::new(Mutex::new(FrameState {
+                buffer: None,
+                width: 0,
+                height: 0,
+                format: None,
+                ready: false,
+            }));
+            let frame = screencopy_manager.capture_output_region(
+                if param.overlay_cursor { 1 } else { 0 },
+                output,
+                region.x,
+                region.y,
+                region.width,
+                region.height,
+                &qh,
+                frame_state.clone()
+            );
+            frame_states.insert(param.output_name.clone(), frame_state);
+            frames.insert(param.output_name.clone(), frame);
+        }
+        let mut attempts = 0;
+        let mut completed_frames = 0;
+        let total_frames = parameters.len();
+        while completed_frames < total_frames && attempts < MAX_ATTEMPTS {
+            completed_frames = frame_states.iter().filter(|(_, state)| {
+                let s = state.lock().unwrap();
+                s.buffer.is_some() || s.ready
+            }).count();
+            if completed_frames >= total_frames {
+                break;
+            }
+            event_queue.blocking_dispatch(self)
+                .map_err(|e| Error::FrameCapture(format!("Failed to dispatch frame events: {}", e)))?;
+            attempts += 1;
+        }
+        if attempts >= MAX_ATTEMPTS {
+            return Err(Error::FrameCapture("Timeout waiting for frame buffers".to_string()));
+        }
+        for (_output_name, frame_state) in &frame_states {
+            let state = frame_state.lock().unwrap();
+            if state.buffer.is_none() {
+                return Err(Error::CaptureFailed);
+            }
+        }
+        let mut buffers: HashMap<String, (tempfile::NamedTempFile, memmap2::MmapMut)> = HashMap::new();
+        for (output_name, frame_state) in &frame_states {
+            let (width, height, stride, size) = {
+                let state = frame_state.lock().unwrap();
+                let width = state.width;
+                let height = state.height;
+                let stride = width * 4;
+                let size = (stride * height) as usize;
+                (width, height, stride, size)
+            };
+            let mut tmp_file = tempfile::NamedTempFile::new()
+                .map_err(|_e| Error::BufferCreation)?;
+            tmp_file.as_file_mut().set_len(size as u64)
+                .map_err(|_e| Error::BufferCreation)?;
+            let mmap = unsafe { memmap2::MmapMut::map_mut(&tmp_file)
+                .map_err(|_e| Error::BufferCreation)?
+            };
+            {
+                let shm = self.globals.shm.as_ref().ok_or(
+                    Error::UnsupportedProtocol("wl_shm not available".to_string())
+                )?;
+                let format = {
+                    let state = frame_state.lock().unwrap();
+                    state.format.unwrap_or(ShmFormat::Xrgb8888)
+                };
+                let pool = shm.create_pool(
+                    unsafe { BorrowedFd::borrow_raw(tmp_file.as_file().as_raw_fd()) },
+                    size as i32,
+                    &qh,
+                    ()
+                );
+                let buffer = pool.create_buffer(0, width as i32, height as i32, stride as i32, format, &qh, ());
+                if let Some(frame) = frames.get(output_name) {
+                    frame.copy(&buffer);
+                }
+            }
+            buffers.insert(output_name.clone(), (tmp_file, mmap));
+        }
+        let mut attempts = 0;
+        let mut completed_frames = 0;
+        while completed_frames < total_frames && attempts < MAX_ATTEMPTS {
+            completed_frames = frame_states.iter().filter(|(_, state)| {
+                let s = state.lock().unwrap();
+                s.ready
+            }).count();
+            if completed_frames >= total_frames {
+                break;
+            }
+            event_queue.blocking_dispatch(self)
+                .map_err(|e| Error::FrameCapture(format!("Failed to dispatch frame events: {}", e)))?;
+            attempts += 1;
+        }
+        if attempts >= MAX_ATTEMPTS {
+            return Err(Error::FrameCapture("Timeout waiting for frame capture completion".to_string()));
+        }
+        for (_output_name, frame_state) in &frame_states {
+            let state = frame_state.lock().unwrap();
+            if state.ready && state.buffer.is_none() {
+                return Err(Error::FrameCapture("Frame is ready but buffer was not received".to_string()));
+            }
+        }
+        let mut results: HashMap<String, CaptureResult> = HashMap::new();
+        for (output_name, (_tmp_file, mmap)) in buffers {
+            let frame_state = &frame_states[&output_name];
+            let (width, height) = {
+                let state = frame_state.lock().unwrap();
+                (state.width, state.height)
+            };
+            let mut buffer_data = mmap.to_vec();
+            if let Some(format) = {
+                let state = frame_state.lock().unwrap();
+                state.format
+            } {
+                match format {
+                    ShmFormat::Xrgb8888 => {
+                        for chunk in buffer_data.chunks_exact_mut(4) {
+                            let b = chunk[0];
+                            let g = chunk[1];
+                            let r = chunk[2];
+                            chunk[0] = r;
+                            chunk[1] = g;
+                            chunk[2] = b;
+                            chunk[3] = 255;
+                        }
+                    }
+                    ShmFormat::Argb8888 => {}
+                    _ => {}
+                }
+            }
+            results.insert(output_name, CaptureResult {
+                data: buffer_data,
+                width,
+                height,
+            });
+        }
+        Ok(MultiOutputCaptureResult {
+            outputs: results,
+        })
+    }
 }
 
-// Реализация Dispatch для реестра
 impl Dispatch<WlRegistry, ()> for WaylandCapture {
     fn event(
         state: &mut Self,
@@ -337,7 +435,6 @@ impl Dispatch<WlRegistry, ()> for WaylandCapture {
         qh: &QueueHandle<Self>,
     ) {
         use wayland_client::protocol::wl_registry::Event;
-        
         if let Event::Global { name, interface, version } = event {
             match interface.as_str() {
                 "wl_compositor" => {
@@ -369,7 +466,6 @@ impl Dispatch<WlRegistry, ()> for WaylandCapture {
     }
 }
 
-// Реализация Dispatch для выходов
 impl Dispatch<WlOutput, ()> for WaylandCapture {
     fn event(
         state: &mut Self,
@@ -380,11 +476,9 @@ impl Dispatch<WlOutput, ()> for WaylandCapture {
         _qh: &QueueHandle<Self>,
     ) {
         use wayland_client::protocol::wl_output::{Event};
-        
         // Находим соответствующий OutputInfo для этого выхода
         // Мы используем ID объекта для сопоставления
         let output_id = output.id().protocol_id();
-        
         match event {
             Event::Geometry { 
                 x, y, 
@@ -395,7 +489,6 @@ impl Dispatch<WlOutput, ()> for WaylandCapture {
                 model: _, 
                 transform: _ 
             } => {
-                // Обновляем координаты для конкретного выхода
                 if let Some(info) = state.globals.output_info.get_mut(&output_id) {
                     info.x = x;
                     info.y = y;
@@ -407,20 +500,17 @@ impl Dispatch<WlOutput, ()> for WaylandCapture {
                 height, 
                 refresh: _ 
             } => {
-                // Обновляем размеры для конкретного выхода
                 if let Some(info) = state.globals.output_info.get_mut(&output_id) {
                     info.width = width;
                     info.height = height;
                 }
             }
             Event::Scale { factor } => {
-                // Обновляем масштаб для конкретного выхода
                 if let Some(info) = state.globals.output_info.get_mut(&output_id) {
                     info.scale = factor;
                 }
             }
             Event::Name { name } => {
-                // Обновляем имя для конкретного выхода
                 if let Some(info) = state.globals.output_info.get_mut(&output_id) {
                     info.name = name.clone();
                 }
@@ -431,7 +521,6 @@ impl Dispatch<WlOutput, ()> for WaylandCapture {
     }
 }
 
-// Реализации Dispatch для других протоколов
 impl Dispatch<WlCompositor, ()> for WaylandCapture {
     fn event(
         _state: &mut Self,
@@ -452,8 +541,7 @@ impl Dispatch<WlShm, ()> for WaylandCapture {
         _data: &(),
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-    ) {
-    }
+    ) {}
 }
 
 impl Dispatch<ZwlrScreencopyManagerV1, ()> for WaylandCapture {
@@ -464,11 +552,9 @@ impl Dispatch<ZwlrScreencopyManagerV1, ()> for WaylandCapture {
         _data: &(),
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-    ) {
-    }
+    ) {}
 }
 
-// Реализация Dispatch для фрейма screencopy
 impl Dispatch<ZwlrScreencopyFrameV1, Arc<Mutex<FrameState>>> for WaylandCapture {
     fn event(
         _state: &mut Self,
@@ -479,13 +565,11 @@ impl Dispatch<ZwlrScreencopyFrameV1, Arc<Mutex<FrameState>>> for WaylandCapture 
         _qh: &QueueHandle<Self>,
     ) {
         use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_frame_v1::Event;
-        
         match event {
             Event::Buffer { format, width, height, stride } => {
                 let mut state = frame_state.lock().unwrap();
                 state.width = width;
                 state.height = height;
-                // Обрабатываем WEnum
                 if let wayland_client::WEnum::Value(val) = format {
                     state.format = Some(val);
                 }
@@ -502,7 +586,6 @@ impl Dispatch<ZwlrScreencopyFrameV1, Arc<Mutex<FrameState>>> for WaylandCapture 
                 frame.destroy();
             }
             Event::Failed => {
-                // Обработка ошибки
                 let mut state = frame_state.lock().unwrap();
                 state.ready = true;
             }
@@ -512,18 +595,15 @@ impl Dispatch<ZwlrScreencopyFrameV1, Arc<Mutex<FrameState>>> for WaylandCapture 
                 log::debug!("Received LinuxDmabuf: format={}, width={}, height={}", format, width, height);
             }
             Event::BufferDone => {
-                // BufferDone означает, что буфер был успешно скопирован
                 log::debug!("Buffer copy completed");
             }
             _ => {
-                // Обработка неизвестных событий
                 log::warn!("Received unknown event: {:?}", event);
             }
         }
     }
 }
 
-// Реализация Dispatch для буфера
 impl Dispatch<WlBuffer, ()> for WaylandCapture {
     fn event(
         _state: &mut Self,
@@ -532,11 +612,9 @@ impl Dispatch<WlBuffer, ()> for WaylandCapture {
         _data: &(),
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-    ) {
-    }
+    ) {}
 }
 
-// Реализация Dispatch для shm_pool
 impl Dispatch<WlShmPool, ()> for WaylandCapture {
     fn event(
         _state: &mut Self,
@@ -545,11 +623,9 @@ impl Dispatch<WlShmPool, ()> for WaylandCapture {
         _data: &(),
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-    ) {
-    }
+    ) {}
 }
 
-// Состояние для обработки захвата кадра
 #[derive(Debug, Clone)]
 struct FrameState {
     buffer: Option<Vec<u8>>,
