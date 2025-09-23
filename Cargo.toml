@@ -2,10 +2,16 @@
 name = "grim-rs"
 version = "0.1.0"
 edition = "2021"
-description = "Pure Rust implementation of grim screenshot utility for Wayland"
-license = "MIT"
-keywords = ["wayland", "screenshot", "grim"]
+description = "Rust implementation of grim screenshot utility for Wayland"
+license-file = "LICENSE"
+keywords = ["wayland", "screenshot", "grim", "screen-capture"]
 categories = ["graphics", "api-bindings"]
+repository = "https://github.com/vremyavnikuda/grim-rs"
+documentation = "https://docs.rs/grim-rs"
+homepage = "https://github.com/vremyavnikuda/grim-rs"
+readme = "README.md"
+exclude = ["/examples", "/target", ".gitignore", "todo.md", "grim.md"]
+authors = ["vremyavnikuda <hopperplayer0@gmail.com>"]
 
 [lib]
 name = "grim_rs"

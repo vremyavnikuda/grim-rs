@@ -1,17 +1,18 @@
 # grim-rs
 
-Pure Rust implementation of `grim` screenshot utility for Wayland compositors.
+Rust implementation of `grim-rs` screenshot utility for Wayland compositors.
 
 ## Features
 
-- ✅ Pure Rust implementation - no external dependencies on C libraries
-- ✅ Native Wayland protocol support via `wayland-client`
-- ✅ Multiple output support
-- ✅ Region-based screenshot capture
-- ✅ PNG output format
-- ✅ Real screenshot capture (not mock data)
-- ✅ Correct color palette transformation
-- ✅ Zero external tool dependencies (no need for system `grim`)
+- Rust implementation - no external dependencies on C libraries
+- Native Wayland protocol support via `wayland-client`
+- Multiple output support
+- Region-based screenshot capture
+- PNG and JPEG output formats
+- Real screenshot capture
+- Correct color palette transformation
+- Zero external tool dependencies
+- Comprehensive API documentation
 
 ## Usage
 
@@ -34,19 +35,55 @@ fn main() -> grim_rs::Result<()> {
     
     // Capture entire screen
     let data = grim.capture_all()?;
-    grim.save_png(&data, 1920, 1080, "screenshot.png")?;
+    grim.save_png(&data.data, data.width, data.height, "screenshot.png")?;
     
     // Capture specific region
     let region = Box::new(100, 100, 800, 600);
     let data = grim.capture_region(region)?;
-    grim.save_png(&data, 800, 600, "region.png")?;
+    grim.save_png(&data.data, data.width, data.height, "region.png")?;
     
     // Capture specific output
     let data = grim.capture_output("DP-1")?;
-    grim.save_png(&data, 1920, 1080, "output.png")?;
+    grim.save_png(&data.data, data.width, data.height, "output.png")?;
+    
+    // Capture multiple outputs with different parameters
+    let parameters = vec![
+        grim_rs::CaptureParameters {
+            output_name: "DP-1".to_string(),
+            // Capture entire output
+            region: None,
+            // Include cursor
+            overlay_cursor: true,
+        },
+        grim_rs::CaptureParameters {
+            output_name: "HDMI-A-1".to_string(),
+            // Capture specific region
+            region: Some(Box::new(0, 0, 1920, 1080)),
+            // Exclude cursor
+            overlay_cursor: false,
+        }
+    ];
+    let results = grim.capture_outputs(parameters)?;
+    for (output_name, capture_result) in results.outputs {
+        let filename = format!("{}.png", output_name);
+        grim.save_png(&capture_result.data, capture_result.width, capture_result.height, &filename)?;
+    }
     
     Ok(())
 }
+```
+
+### Command Line Usage
+
+```bash
+# List available outputs
+cargo run --example simple outputs
+
+# Capture entire screen
+cargo run --example simple all screenshot.png
+
+# Capture specific region
+cargo run --example simple geometry "100,100 800x600" region.png
 ```
 
 ### Supported Wayland Protocols
@@ -55,13 +92,21 @@ fn main() -> grim_rs::Result<()> {
 - `zwlr_screencopy_manager_v1` - Screenshot capture (wlroots extension)
 - `wl_output` - Output information
 
+## API Documentation
+
+Comprehensive API documentation is available at [docs.rs](https://docs.rs/grim-rs) or can be generated locally:
+
+```bash
+cargo doc --open
+```
+
 ## Comparison with Original grim
 
 | Feature | Original grim | grim-rs |
 |---------|---------------|---------|
 | Language | C | Rust |
 | Dependencies | libpng, pixman, wayland | Pure Rust crates |
-| Output formats | PNG, JPEG, PPM | PNG (extensible) |
+| Output formats | PNG, JPEG, PPM | PNG, JPEG (extensible) |
 | Installation | System package | Rust crate |
 | Integration | External process | Library |
 | Memory safety | Manual | Guaranteed by Rust |
@@ -85,14 +130,15 @@ fn main() -> grim_rs::Result<()> {
 
 ### Key Components
 
-1. **Screenshot** - Main screenshot capture logic
-2. **Buffer** - Shared memory buffer management
-3. **Geometry** - Region and coordinate handling
-4. **Error** - Comprehensive error handling
+1. **Grim** - Main interface for taking screenshots
+2. **CaptureResult** - Contains screenshot data and dimensions
+3. **CaptureParameters** - Parameters for multi-output capture
+4. **Buffer** - Shared memory buffer management
+5. **Geometry** - Region and coordinate handling
+6. **Error** - Comprehensive error handling
 
 ## Limitations
 
-- Currently supports PNG output only (JPEG and PPM can be added)
 - Requires wlroots-based compositor (Hyprland, Sway, etc.)
 - Linux-only (due to shared memory implementation)
 
@@ -109,8 +155,9 @@ cargo build --release
 # Run tests
 cargo test
 
-# Run example
+# Run examples
 cargo run --example simple all screenshot.png
+cargo run --example multi_output
 ```
 
 ## Contributing
