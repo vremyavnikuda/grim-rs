@@ -337,6 +337,7 @@ struct OutputInfo {
     logical_width: i32, // From xdg_output protocol
     logical_height: i32, // From xdg_output protocol
     logical_scale_known: bool, // Whether we have xdg_output info
+    description: Option<String>, // Output description from wl_output or xdg_output
 }
 
 struct WaylandGlobals {
@@ -762,6 +763,7 @@ impl WaylandCapture {
                     name: info.name.clone(),
                     geometry: Box::new(x, y, width, height),
                     scale: info.scale,
+                    description: info.description.clone(),
                 }
             })
             .collect::<Vec<_>>();
@@ -1268,6 +1270,7 @@ impl Dispatch<WlRegistry, ()> for WaylandCapture {
                         logical_width: 0,
                         logical_height: 0,
                         logical_scale_known: false,
+                        description: None,
                     });
                     // Get the index of the output we're about to add
                     let output_idx = state.globals.outputs.len();
@@ -1349,7 +1352,11 @@ impl Dispatch<WlOutput, ()> for WaylandCapture {
                     info.name = name.clone();
                 }
             }
-            Event::Description { description: _ } => {}
+            Event::Description { description } => {
+                if let Some(info) = state.globals.output_info.get_mut(&output_id) {
+                    info.description = Some(description);
+                }
+            }
             _ => {}
         }
     }
@@ -1488,8 +1495,8 @@ impl Dispatch<ZxdgOutputV1, ()> for WaylandCapture {
                             info.name = name.clone();
                         }
                     }
-                    Event::Description { description: _ } => {
-                        // Could handle description if needed
+                    Event::Description { description } => {
+                        info.description = Some(description);
                     }
                     Event::Done => {
                         // The xdg_output is done with sending information

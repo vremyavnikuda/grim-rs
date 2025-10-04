@@ -65,6 +65,8 @@ pub struct Output {
     pub geometry: Box,
     /// Scale factor of the output (e.g., 1 for normal DPI, 2 for HiDPI).
     pub scale: i32,
+    /// Description of the output (e.g., monitor model, manufacturer info).
+    pub description: Option<String>,
 }
 
 /// Parameters for capturing a specific output.

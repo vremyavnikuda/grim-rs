@@ -47,6 +47,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Buffer creation errors now include specific failure details and affected output names
   - File I/O errors now include operation context and file paths
   - Scaling errors include source and target dimensions for better debugging
+- **Output Description Support**: Added comprehensive support for display output descriptions
+  - New `description: Option<String>` field in `Output` struct providing monitor model and manufacturer information
+  - Automatically captures descriptions from both `wl_output::Event::Description` and `zxdg_output_v1::Event::Description` Wayland protocols
+  - Provides detailed information about connected displays (e.g., "Dell Inc. DELL U2520D", "Samsung Electric Company S27R35x")
+  - Useful for multi-monitor setups to identify specific displays by their hardware description
+  - Returns `None` if compositor doesn't provide description information
+  - Full compatibility with original grim's output information API
+  - Benefits:
+    - Easier identification of specific monitors in multi-display configurations
+    - Better logging and debugging with human-readable display information
+    - Enables display-specific capture logic based on hardware model
+    - Consistent with Wayland protocol specifications for output metadata
 
 ### Changed
 - **Multi-Monitor Compositing**: Simplified `capture_region()` implementation
