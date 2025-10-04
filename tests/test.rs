@@ -319,16 +319,15 @@ fn test_region_intersection_with_outputs() {
 
 // Tests for output transform functionality
 mod transform_tests {
-
     /// Test that normal transform doesn't change dimensions
     #[test]
     fn test_transform_normal() {
         let width = 1920;
         let height = 1080;
-        
+
         // Note: These are internal functions, so we're testing the behavior indirectly
         // by verifying that outputs with different transforms would have correct dimensions
-        
+
         // For normal transform, width and height should remain the same
         assert_eq!(width, 1920);
         assert_eq!(height, 1080);
@@ -340,11 +339,11 @@ mod transform_tests {
         // With 90° rotation, a 1920x1080 display becomes 1080x1920
         let original_width = 1920;
         let original_height = 1080;
-        
+
         // After 90° rotation
         let expected_width = 1080;
         let expected_height = 1920;
-        
+
         // Verify the concept: rotated dimensions swap
         assert_ne!(original_width, expected_width);
         assert_ne!(original_height, expected_height);
@@ -358,7 +357,7 @@ mod transform_tests {
         // With 180° rotation, dimensions stay the same
         let width = 1920;
         let height = 1080;
-        
+
         // After 180° rotation, dimensions remain unchanged
         assert_eq!(width, 1920);
         assert_eq!(height, 1080);
@@ -370,11 +369,11 @@ mod transform_tests {
         // With 270° rotation, a 1920x1080 display becomes 1080x1920
         let original_width = 1920;
         let original_height = 1080;
-        
+
         // After 270° rotation
         let expected_width = 1080;
         let expected_height = 1920;
-        
+
         assert_eq!(original_width, expected_height);
         assert_eq!(original_height, expected_width);
     }
@@ -386,7 +385,7 @@ mod transform_tests {
         // Normal flip doesn't change dimensions
         let width = 1920;
         let height = 1080;
-        
+
         assert_eq!(width, 1920);
         assert_eq!(height, 1080);
     }
@@ -397,10 +396,10 @@ mod transform_tests {
         // Flipped 90° rotation should also swap dimensions
         let original_width = 1920;
         let original_height = 1080;
-        
+
         let expected_width = 1080;
         let expected_height = 1920;
-        
+
         assert_eq!(original_width, expected_height);
         assert_eq!(original_height, expected_width);
     }
@@ -414,20 +413,20 @@ mod transform_tests {
             height: i32,
             rotated: bool,
         }
-        
+
         let outputs = vec![
             TestOutput { width: 1920, height: 1080, rotated: false }, // Normal
-            TestOutput { width: 1080, height: 1920, rotated: true },  // 90° rotated
+            TestOutput { width: 1080, height: 1920, rotated: true } // 90° rotated
         ];
-        
+
         assert_eq!(outputs[0].width, 1920);
         assert_eq!(outputs[0].height, 1080);
         assert!(!outputs[0].rotated);
-        
+
         assert_eq!(outputs[1].width, 1080);
         assert_eq!(outputs[1].height, 1920);
         assert!(outputs[1].rotated);
-        
+
         // Verify that dimensions are swapped for rotated output
         assert_eq!(outputs[0].width, outputs[1].height);
         assert_eq!(outputs[0].height, outputs[1].width);
@@ -440,18 +439,18 @@ mod transform_tests {
         let physical_width = 3840;
         let physical_height = 2160;
         let scale = 2;
-        
+
         // Without transform
         let logical_width = physical_width / scale;
         let logical_height = physical_height / scale;
-        
+
         assert_eq!(logical_width, 1920);
         assert_eq!(logical_height, 1080);
-        
+
         // With 90° transform, logical dimensions should swap
         let logical_width_rotated = logical_height;
         let logical_height_rotated = logical_width;
-        
+
         assert_eq!(logical_width_rotated, 1080);
         assert_eq!(logical_height_rotated, 1920);
     }
@@ -462,14 +461,14 @@ mod transform_tests {
         // Simulate output with 90 degree rotation
         // Original dimensions: 1920x1080
         // After 90° rotation: 1080x1920
-        
+
         let original_width = 1920;
         let original_height = 1080;
-        
+
         // After 90° rotation, dimensions swap
         let rotated_width = 1080;
         let rotated_height = 1920;
-        
+
         assert_eq!(original_width, rotated_height);
         assert_eq!(original_height, rotated_width);
     }
@@ -481,16 +480,28 @@ mod transform_tests {
         // Pattern: Red, Green
         //          Blue, White
         let test_data: Vec<u8> = vec![
-            255, 0, 0, 255,   // Red
-            0, 255, 0, 255,   // Green
-            0, 0, 255, 255,   // Blue
-            255, 255, 255, 255, // White
+            255,
+            0,
+            0,
+            255, // Red
+            0,
+            255,
+            0,
+            255, // Green
+            0,
+            0,
+            255,
+            255, // Blue
+            255,
+            255,
+            255,
+            255 // White
         ];
-        
+
         // After 90° clockwise rotation:
         // Blue, Red
         // White, Green
-        
+
         // We can't test the actual transform function since it's private,
         // but we can verify the logic is correct
         assert_eq!(test_data.len(), 2 * 2 * 4);
@@ -501,32 +512,31 @@ mod transform_tests {
     fn test_flipped_transforms_dimensions() {
         let width = 1920;
         let height = 1080;
-        
+
         // Flipped (no rotation) - dimensions stay same
         assert_eq!(width, 1920);
         assert_eq!(height, 1080);
-        
+
         // Flipped180 (vertical flip) - dimensions stay same
         assert_eq!(width, 1920);
         assert_eq!(height, 1080);
     }
-    
+
     /// Test rotation angle constants
     #[test]
     fn test_rotation_angles() {
-        use std::f64::consts::{FRAC_PI_2, PI};
-        
+        use std::f64::consts::{ FRAC_PI_2, PI };
+
         // Verify rotation constants are correct
         let angle_90 = FRAC_PI_2; // π/2
-        let angle_180 = PI;        // π
+        let angle_180 = PI; // π
         let angle_270 = 3.0 * FRAC_PI_2; // 3π/2
-        
+
         // These should be in valid ranges
         assert!(angle_90 > 0.0 && angle_90 < PI);
         assert_eq!(angle_180, PI);
         assert!(angle_270 > PI && angle_270 < 2.0 * PI);
     }
-
 }
 
 #[cfg(test)]
@@ -544,15 +554,15 @@ mod y_invert_tests {
     #[test]
     fn test_y_invert_flag_detection() {
         const Y_INVERT: u32 = 1;
-        
+
         // Test flag set
         let flags_with_invert = 1u32;
         assert_ne!(flags_with_invert & Y_INVERT, 0);
-        
+
         // Test flag not set
         let flags_without_invert = 0u32;
         assert_eq!(flags_without_invert & Y_INVERT, 0);
-        
+
         // Test with other flags
         let flags_mixed = 3u32; // bit 0 and bit 1 set
         assert_ne!(flags_mixed & Y_INVERT, 0);
@@ -563,7 +573,7 @@ mod y_invert_tests {
     fn test_y_invert_preserves_dimensions() {
         let width = 1920;
         let height = 1080;
-        
+
         // Y-invert (vertical flip) should preserve dimensions
         assert_eq!(width, 1920);
         assert_eq!(height, 1080);
@@ -574,18 +584,18 @@ mod y_invert_tests {
     fn test_y_invert_with_transform() {
         // Test that Y-invert can be combined with transforms
         // Y-invert is applied AFTER transform according to Wayland spec
-        
-        let original_width = 1920;
-        let original_height = 1080;
-        
+
+        let _original_width = 1920;
+        let _original_height = 1080;
+
         // After 90° transform: dimensions swap
         let transformed_width = 1080;
         let transformed_height = 1920;
-        
+
         // After Y-invert: dimensions stay same
         let final_width = transformed_width;
         let final_height = transformed_height;
-        
+
         assert_eq!(final_width, 1080);
         assert_eq!(final_height, 1920);
     }
@@ -597,7 +607,7 @@ mod y_invert_tests {
         // In actual code, FrameState { ..., flags: u32 } should exist
         let flags: u32 = 0;
         assert_eq!(flags, 0);
-        
+
         let flags_with_invert: u32 = 1;
         assert_eq!(flags_with_invert, 1);
     }
