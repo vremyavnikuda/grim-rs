@@ -18,7 +18,7 @@ name = "grim_rs"
 crate-type = ["lib"]
 
 [[bin]]
-name = "grim"
+name = "grim-rs"
 path = "src/bin/grim.rs"
 
 [dependencies]
@@ -34,9 +34,11 @@ memmap2 = "0.9"
 tempfile = "3.10"
 log = "0.4"
 env_logger = "0.10"
+chrono = "0.4"
 
 [dev-dependencies]
 env_logger = "0.10"
+regex = "1.10"
 
 [features]
 default = ["png_support", "jpeg"]

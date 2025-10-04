@@ -1,6 +1,8 @@
 use grim_rs::{ Grim, Box as GrimBox, CaptureParameters };
 use std::env;
-use std::path::Path;
+use std::path::{ Path, PathBuf };
+use std::fs;
+use std::io::{ self, BufRead };
 
 fn main() -> grim_rs::Result<()> {
     let args: Vec<String> = env::args().collect();
@@ -8,7 +10,6 @@ fn main() -> grim_rs::Result<()> {
     let mut output_file = None;
     let mut arg_idx = 1;
 
-    // Parse command line arguments similar to the original grim
     while arg_idx < args.len() {
         match args[arg_idx].as_str() {
             "-h" | "--help" => {
@@ -124,7 +125,6 @@ fn main() -> grim_rs::Result<()> {
                 opts.with_cursor = true;
             }
             _ => {
-                // Assume it's the output file
                 if output_file.is_none() {
                     output_file = Some(args[arg_idx].clone());
                 } else {
@@ -136,22 +136,16 @@ fn main() -> grim_rs::Result<()> {
         arg_idx += 1;
     }
 
-    // Set default output file if not provided
     let output_file = if let Some(file) = output_file {
         file
     } else {
-        // Generate default filename
         generate_default_filename(opts.filetype)?
     };
 
-    // Create Grim instance
     let mut grim = Grim::new()?;
 
-    // Perform the capture
     let result = if let Some(ref output_name) = opts.output_name {
-        // Capture specific output
         if opts.with_cursor {
-            // For cursor support, we need to use the capture parameters approach
             let params = vec![CaptureParameters {
                 output_name: output_name.clone(),
                 region: opts.geometry,
@@ -168,14 +162,11 @@ fn main() -> grim_rs::Result<()> {
             grim.capture_output_with_scale(output_name, opts.scale.unwrap_or(1.0))?
         }
     } else if let Some(ref geometry) = opts.geometry {
-        // Capture specific region
         grim.capture_region_with_scale(*geometry, opts.scale.unwrap_or(1.0))?
     } else {
-        // Capture all outputs
         grim.capture_all_with_scale(opts.scale.unwrap_or(1.0))?
     };
 
-    // Save or output the result
     if output_file == "-" {
         // Output to stdout
         match opts.filetype {
@@ -328,12 +319,11 @@ fn print_help() {
 }
 
 fn generate_default_filename(filetype: FileType) -> grim_rs::Result<String> {
-    use std::time::{ SystemTime, UNIX_EPOCH };
+    use chrono::Local;
 
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|e| grim_rs::Error::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
-    let timestamp = now.as_secs();
+    // Format: YYYYMMDD_HHhMMmSSs_grim.ext (e.g., 20241004_10h30m45s_grim.png)
+    let now = Local::now();
+    let timestamp = now.format("%Y%m%d_%Hh%Mm%Ss");
 
     let ext = match filetype {
         FileType::Png => "png",
@@ -341,5 +331,91 @@ fn generate_default_filename(filetype: FileType) -> grim_rs::Result<String> {
         FileType::Jpeg => "jpeg",
     };
 
-    Ok(format!("{}.{}", timestamp, ext))
+    let output_dir = get_output_dir();
+    let filename = format!("{}_grim.{}", timestamp, ext);
+
+    Ok(output_dir.join(filename).to_string_lossy().to_string())
+}
+
+/// ~/.config/user-dirs.dirs
+fn get_xdg_pictures_dir() -> Option<PathBuf> {
+    // XDG_PICTURES_DIR
+    if let Ok(pictures_dir) = env::var("XDG_PICTURES_DIR") {
+        let expanded = expand_home_dir(&pictures_dir);
+        return Some(PathBuf::from(expanded));
+    }
+
+    // Parse ~/.config/user-dirs.dirs
+    let config_home = env
+        ::var("XDG_CONFIG_HOME")
+        .ok()
+        .or_else(|| {
+            env::var("HOME")
+                .ok()
+                .map(|home| format!("{}/.config", home))
+        })?;
+
+    let user_dirs_file = PathBuf::from(config_home).join("user-dirs.dirs");
+
+    if !user_dirs_file.exists() {
+        return None;
+    }
+
+    let file = fs::File::open(user_dirs_file).ok()?;
+    let reader = io::BufReader::new(file);
+
+    for line in reader.lines().flatten() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        // Look for XDG_PICTURES_DIR="..."
+        if line.starts_with("XDG_PICTURES_DIR=") {
+            if let Some(value) = line.strip_prefix("XDG_PICTURES_DIR=") {
+                // Remove quotes
+                let value = value.trim_matches('"').trim_matches('\'');
+                let expanded = expand_home_dir(value);
+                return Some(PathBuf::from(expanded));
+            }
+        }
+    }
+
+    None
+}
+
+/// Expand $HOME in paths
+fn expand_home_dir(path: &str) -> String {
+    if path.starts_with("$HOME") {
+        if let Ok(home) = env::var("HOME") {
+            return path.replace("$HOME", &home);
+        }
+    }
+    path.to_string()
+}
+
+/// GRIM_DEFAULT_DIR > XDG_PICTURES_DIR > "."
+fn get_output_dir() -> PathBuf {
+    // GRIM_DEFAULT_DIR
+    if let Ok(default_dir) = env::var("GRIM_DEFAULT_DIR") {
+        let path = PathBuf::from(default_dir);
+        if
+            path.exists() ||
+            path
+                .parent()
+                .map(|p| p.exists())
+                .unwrap_or(false)
+        {
+            return path;
+        }
+    }
+
+    // XDG_PICTURES_DIR
+    if let Some(pictures_dir) = get_xdg_pictures_dir() {
+        if pictures_dir.exists() {
+            return pictures_dir;
+        }
+    }
+
+    PathBuf::from(".")
 }

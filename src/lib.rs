@@ -16,7 +16,7 @@
 //!
 //! ## Example
 //!
-//! ```no_run
+//! ```rust
 //! use grim_rs::Grim;
 //!
 //! let mut grim = Grim::new()?;
@@ -124,7 +124,7 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```rust
     /// use grim_rs::Grim;
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -150,7 +150,7 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```rust
     /// use grim_rs::Grim;
     ///
     /// let mut grim = Grim::new()?;
@@ -179,7 +179,7 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```rust
     /// use grim_rs::Grim;
     ///
     /// let mut grim = Grim::new()?;
@@ -209,7 +209,7 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```rust
     /// use grim_rs::Grim;
     ///
     /// let mut grim = Grim::new()?;
@@ -238,7 +238,7 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```rust
     /// use grim_rs::Grim;
     ///
     /// let mut grim = Grim::new()?;
@@ -268,7 +268,7 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```rust
     /// use grim_rs::Grim;
     ///
     /// let mut grim = Grim::new()?;
@@ -301,11 +301,12 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```rust
     /// use grim_rs::{Grim, Box};
     ///
     /// let mut grim = Grim::new()?;
-    /// let region = Box::new(100, 100, 800, 600); // x=100, y=100, width=800, height=600
+    /// // x=100, y=100, width=800, height=600
+    /// let region = Box::new(100, 100, 800, 600);
     /// let result = grim.capture_region(region)?;
     /// println!("Captured region: {}x{}", result.width, result.height);
     /// # Ok::<(), grim_rs::Error>(())
@@ -332,11 +333,12 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```rust
     /// use grim_rs::{Grim, Box};
     ///
     /// let mut grim = Grim::new()?;
-    /// let region = Box::new(100, 100, 800, 600); // x=100, y=100, width=800, height=600
+    /// // x=100, y=100, width=800, height=600
+    /// let region = Box::new(100, 100, 800, 600);
     /// let result = grim.capture_region_with_scale(region, 1.0)?;
     /// println!("Captured region: {}x{}", result.width, result.height);
     /// # Ok::<(), grim_rs::Error>(())
@@ -365,7 +367,7 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```rust
     /// use grim_rs::{Grim, CaptureParameters, Box};
     ///
     /// let mut grim = Grim::new()?;
@@ -388,9 +390,12 @@ impl Grim {
     ///     let region = Box::new(0, 0, 400, 300);
     ///     parameters.push(CaptureParameters {
     ///         output_name: outputs[1].name.clone(),
-    ///         region: Some(region), // Capture specific region
-    ///         overlay_cursor: false, // Exclude cursor
-    ///         scale: None, // Use default scale
+    ///         // Capture specific region
+    ///         region: Some(region),
+    ///         // Exclude cursor
+    ///         overlay_cursor: false,
+    ///         // Use default scale
+    ///         scale: None,
     ///     });
     /// }
     ///
@@ -445,7 +450,7 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```rust
     /// use grim_rs::Grim;
     ///
     /// let mut grim = Grim::new()?;
@@ -483,7 +488,7 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```rust
     /// use grim_rs::Grim;
     ///
     /// let mut grim = Grim::new()?;
@@ -591,7 +596,7 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```rust
     /// use grim_rs::Grim;
     ///
     /// let mut grim = Grim::new()?;
@@ -633,7 +638,7 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```rust
     /// use grim_rs::Grim;
     ///
     /// let mut grim = Grim::new()?;
@@ -766,7 +771,7 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```rust
     /// use grim_rs::Grim;
     ///
     /// let mut grim = Grim::new()?;
@@ -805,7 +810,7 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```rust
     /// use grim_rs::Grim;
     ///
     /// let mut grim = Grim::new()?;
@@ -928,7 +933,7 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```rust
     /// use grim_rs::Grim;
     ///
     /// let mut grim = Grim::new()?;
@@ -938,7 +943,8 @@ impl Grim {
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
     pub fn to_png(&self, data: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
-        self.to_png_with_compression(data, width, height, 6) // Default compression level of 6
+        // Default compression level of 6
+        self.to_png_with_compression(data, width, height, 6)
     }
 
     /// Get image data as PNG bytes with compression level control.
@@ -963,7 +969,7 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```rust
     /// use grim_rs::Grim;
     ///
     /// let mut grim = Grim::new()?;
@@ -1070,7 +1076,7 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```rust
     /// use grim_rs::Grim;
     ///
     /// let mut grim = Grim::new()?;
@@ -1111,7 +1117,7 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```rust
     /// use grim_rs::Grim;
     ///
     /// let mut grim = Grim::new()?;
@@ -1121,11 +1127,11 @@ impl Grim {
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
     pub fn to_ppm(&self, data: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
-        // Create PPM header (P6 format - binary RGB)
+        // PPM header (P6 format - binary RGB)
         let header = format!("P6\n{} {}\n255\n", width, height);
         let mut ppm_data = header.into_bytes();
 
-        // Convert RGBA to RGB for PPM
+        // RGBA to RGB for PPM
         for chunk in data.chunks_exact(4) {
             ppm_data.push(chunk[0]); // R
             ppm_data.push(chunk[1]); // G
@@ -1151,7 +1157,7 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```rust
     /// use grim_rs::Grim;
     ///
     /// let region = Grim::read_region_from_stdin()?;
@@ -1191,7 +1197,7 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```rust
     /// use grim_rs::Grim;
     ///
     /// let mut grim = Grim::new()?;
@@ -1228,7 +1234,7 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```rust
     /// use grim_rs::Grim;
     ///
     /// let mut grim = Grim::new()?;
@@ -1271,7 +1277,7 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```rust
     /// use grim_rs::Grim;
     ///
     /// let mut grim = Grim::new()?;
@@ -1281,7 +1287,8 @@ impl Grim {
     /// ```
     #[cfg(feature = "jpeg")]
     pub fn write_jpeg_to_stdout(&self, data: &[u8], width: u32, height: u32) -> Result<()> {
-        self.write_jpeg_to_stdout_with_quality(data, width, height, 80) // Default quality
+        // Default quality
+        self.write_jpeg_to_stdout_with_quality(data, width, height, 80)
     }
 
     /// Write image data to stdout as JPEG with quality control.
@@ -1304,7 +1311,7 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```rust
     /// use grim_rs::Grim;
     ///
     /// let mut grim = Grim::new()?;
@@ -1347,7 +1354,7 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```rust
     /// use grim_rs::Grim;
     ///
     /// let mut grim = Grim::new()?;
@@ -1445,11 +1452,13 @@ mod tests {
     #[test]
     fn test_ppm_format() {
         let grim = Grim::new().unwrap();
-        let test_data = vec![255u8; 16]; // 4 pixels with RGBA
+        // 4 pixels with RGBA
+        let test_data = vec![255u8; 16];
         let ppm_result = grim.to_ppm(&test_data, 2, 2);
         assert!(ppm_result.is_ok());
         let ppm_data = ppm_result.unwrap();
-        assert!(ppm_data.starts_with(b"P6\n2 2\n255\n")); // PPM header
+        // PPM header
+        assert!(ppm_data.starts_with(b"P6\n2 2\n255\n"));
         // Should contain 4 RGB pixels (12 bytes after header)
         assert!(ppm_data.len() >= 12);
     }
@@ -1478,7 +1487,8 @@ mod tests {
         match test_capture {
             Ok(_) => {} // Success means the method works
             Err(Error::NoOutputs) => {} // Expected if no outputs
-            Err(e) => panic!("Unexpected error: {:?}", e), // Any other error is a problem
+            // Any other error is a problem
+            Err(e) => panic!("Unexpected error: {:?}", e),
         }
     }
 }
