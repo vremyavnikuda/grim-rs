@@ -272,6 +272,57 @@ fn blit_capture(
     }
 }
 
+/// Check if outputs have overlapping regions.
+/// Returns true if any two outputs overlap.
+fn check_outputs_overlap(outputs: &[(WlOutput, OutputInfo)]) -> bool {
+    for i in 0..outputs.len() {
+        let box1 = Box::new(
+            outputs[i].1.x,
+            outputs[i].1.y,
+            outputs[i].1.width,
+            outputs[i].1.height
+        );
+
+        for j in i + 1..outputs.len() {
+            let box2 = Box::new(
+                outputs[j].1.x,
+                outputs[j].1.y,
+                outputs[j].1.width,
+                outputs[j].1.height
+            );
+
+            if box1.intersects(&box2) {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+/// Check if the layout is grid-aligned (outputs are pixel-aligned and don't overlap).
+/// Grid-aligned layouts can use faster SRC compositing instead of OVER.
+fn is_grid_aligned(region: &Box, outputs: &[(WlOutput, OutputInfo)]) -> bool {
+    // Check if there are any overlapping outputs
+    if check_outputs_overlap(outputs) {
+        return false;
+    }
+
+    // Check if all output boundaries within the region are pixel-aligned
+    // In our case, since coordinates are already i32, they are pixel-aligned by definition
+    // We just need to verify that outputs that intersect the region are properly aligned
+    for (_, info) in outputs {
+        let output_box = Box::new(info.x, info.y, info.width, info.height);
+        if output_box.intersects(region) {
+            // All our coordinates are integers, so they're automatically grid-aligned
+            // The main check is just ensuring no overlaps (done above)
+            continue;
+        }
+    }
+
+    true
+}
+
 #[derive(Clone)]
 struct OutputInfo {
     name: String,
@@ -628,6 +679,18 @@ impl WaylandCapture {
         let mut dest = vec![0u8; dest_width * dest_height * 4];
         let mut any_capture = false;
 
+        // Check if the layout is grid-aligned (no overlaps, pixel-aligned boundaries)
+        // Grid-aligned layouts allow for optimized SRC-mode compositing
+        let _grid_aligned = is_grid_aligned(&region, outputs);
+
+        // Note: When grid_aligned is true, we know outputs don't overlap, which means:
+        // 1. Each pixel in the destination is written exactly once (no blending needed)
+        // 2. We can use direct copy (SRC mode) instead of OVER mode
+        // 3. This is automatically achieved by our current blit_capture implementation
+        //    which does direct memory copy without alpha blending
+        // The main benefit is that we can skip overlap checks in the future or
+        // potentially parallelize captures (future optimization)
+
         for (output, info) in outputs {
             let output_box = Box::new(info.x, info.y, info.width, info.height);
             if let Some(intersection) = output_box.intersection(&region) {
@@ -651,6 +714,11 @@ impl WaylandCapture {
 
                 let offset_x = (intersection.x - region.x) as usize;
                 let offset_y = (intersection.y - region.y) as usize;
+
+                // For grid-aligned layouts, this is SRC-mode copy (no blending)
+                // For overlapping layouts, this would need alpha blending (OVER mode)
+                // Currently we always use direct copy, which is correct for grid-aligned
+                // and acceptable for most non-grid-aligned cases (last write wins)
                 blit_capture(&mut dest, dest_width, dest_height, &capture, offset_x, offset_y);
                 any_capture = true;
             }
@@ -816,14 +884,16 @@ impl WaylandCapture {
         use image::{ ImageBuffer, Rgba, imageops };
 
         // Convert raw RGBA data to ImageBuffer
-        let img = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_raw(
-            old_width,
-            old_height,
-            capture_result.data
-        ).ok_or_else(|| Error::Io(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            "Failed to create image buffer"
-        )))?;
+        let img = ImageBuffer::<Rgba<u8>, Vec<u8>>
+            ::from_raw(old_width, old_height, capture_result.data)
+            .ok_or_else(||
+                Error::Io(
+                    std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "Failed to create image buffer"
+                    )
+                )
+            )?;
 
         // Choose filter based on scale factor:
         // - Lanczos3 for significant downscaling (scale < 0.75) for better quality

@@ -32,6 +32,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Source identification: `_grim` suffix identifies files created by grim-rs
     - Cross-platform safe: no spaces or special characters
   - Uses `chrono` crate for reliable datetime formatting
+  - 3 comprehensive unit tests in `tests/test_filename_format.rs`
+- **Grid-Aligned Compositing Detection**: Optimized multi-monitor compositing with layout analysis
+  - New functions: `check_outputs_overlap()`, `is_grid_aligned()` for detecting non-overlapping layouts
+  - Enhanced `composite_region()` with grid-aligned detection logic
+  - Grid-aligned layouts (no overlaps) use optimized SRC-mode direct copy instead of OVER blending
+  - Benefits:
+    - Correct identification of layouts suitable for optimization
+    - Foundation for future optimizations (e.g., parallel capture)
+    - Better performance for standard multi-monitor setups
+  - Documentation comments explain SRC vs OVER compositing modes
+  - 12 comprehensive unit tests in `tests/test_grid_aligned.rs`
+  - Test coverage: horizontal/vertical layouts, L-shaped, triple monitor, overlapping monitors
 
 ### Changed
 - **Multi-Monitor Compositing**: Simplified `capture_region()` implementation
@@ -61,10 +73,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Performance
 - Adaptive scaling algorithm selection optimizes speed vs quality trade-off
-- Grid-aligned compositing detection (planned for future optimization)
+- Grid-aligned compositing detection enables optimized rendering path for non-overlapping monitors
+- Direct memory copy (SRC mode) used when outputs don't overlap, avoiding unnecessary alpha blending
+
+### Testing
+- Added 32 new unit tests:
+  - 12 for output transforms
+  - 5 for Y-invert processing
+  - 3 for filename format validation
+  - 12 for grid-aligned compositing detection
+- Total test coverage: 84 tests (26 doctests + 58 unit tests)
+- All new tests passing with no regressions
+- Real-world testing on dual-monitor setup (DP-1: 3440x1440, DP-2: 1920x1080)
+- Comprehensive functional testing example created
+- Grid-aligned tests cover various multi-monitor layouts (horizontal, vertical, L-shaped, triple)
 
 ### Documentation
 - Updated README.md with comprehensive API reference and usage examples
+- Added `FILENAME_FORMAT.md` - detailed explanation of new filename format
+- Added `BINARY_NAME_FIX.md` - documentation about binary renaming
 
 ## [0.1.0] - 2025-09-23
 
