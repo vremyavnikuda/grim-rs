@@ -904,13 +904,23 @@ impl WaylandCapture {
                 )
             )?;
 
-        // Choose filter based on scale factor:
-        // - Lanczos3 for significant downscaling (scale < 0.75) for better quality
-        // - Triangle (bilinear) for other cases (faster, good quality)
-        let filter = if scale < 0.75 {
-            imageops::FilterType::Lanczos3
+        // Choose filter based on scale factor for optimal quality/performance balance:
+        // - Upscaling (>1.0): Triangle (bilinear) - smooth, avoids pixelation
+        // - Mild downscaling (0.75-1.0): Triangle - fast, good quality
+        // - Moderate downscaling (0.5-0.75): CatmullRom - sharper than Triangle, faster than Lanczos3
+        // - Heavy downscaling (<0.5): Lanczos3 - best quality for extreme reduction
+        let filter = if scale > 1.0 {
+            // Upscaling: Triangle provides smooth interpolation
+            imageops::FilterType::Triangle
+        } else if scale >= 0.75 {
+            // Mild downscaling: Triangle is fast and produces good results
+            imageops::FilterType::Triangle
+        } else if scale >= 0.5 {
+            // Moderate downscaling: CatmullRom offers sharp results with good performance
+            imageops::FilterType::CatmullRom
         } else {
-            imageops::FilterType::Triangle // Bilinear interpolation
+            // Heavy downscaling: Lanczos3 provides the best quality
+            imageops::FilterType::Lanczos3
         };
 
         // Resize with chosen filter

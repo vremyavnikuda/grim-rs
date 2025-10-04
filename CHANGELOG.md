@@ -13,9 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Functions: `apply_output_transform()`, `apply_image_transform()`, `rotate_90/180/270()`, `flip_horizontal/vertical()`
 - **Y-invert Flag Handling**: Proper handling of `ZWLR_SCREENCOPY_FRAME_V1_FLAGS_Y_INVERT` flag
   - Y-invert applied after output transform (per Wayland specification)
-- **High-Quality Image Scaling**: Adaptive algorithm selection for superior downscaling quality
-  - Bilinear (Triangle filter) for scale ≥ 0.75 - fast, high-quality for small changes
-  - Lanczos3 convolution for scale < 0.75 - superior quality for significant downscaling
+- **High-Quality Image Scaling**: Adaptive algorithm selection with 4-tier gradation for optimal quality/performance balance
+  - Upscaling (>1.0): Triangle filter - smooth interpolation, avoids pixelation
+  - Mild downscaling (0.75-1.0): Triangle - fast, high-quality for small changes
+  - Moderate downscaling (0.5-0.75): CatmullRom - sharper results, faster than Lanczos3
+  - Heavy downscaling (<0.5): Lanczos3 convolution - best quality for extreme reduction
   - New functions: `capture_all_with_scale()`, `capture_region_with_scale()`, `capture_output_with_scale()`
   - Comprehensive scaling demonstrations with real screenshots
 - **XDG Pictures Directory Support**: Automatic file placement in user's Pictures folder
