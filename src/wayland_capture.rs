@@ -803,35 +803,42 @@ impl WaylandCapture {
             return Ok(capture_result);
         }
 
-        let old_width = capture_result.width as f64;
-        let old_height = capture_result.height as f64;
+        let old_width = capture_result.width;
+        let old_height = capture_result.height;
+        let new_width = ((old_width as f64) * scale) as u32;
+        let new_height = ((old_height as f64) * scale) as u32;
 
-        let new_width = (old_width * scale) as u32;
-        let new_height = (old_height * scale) as u32;
-
-        // Create a new buffer for the scaled image
-        let mut scaled_data = vec![0u8; (new_width * new_height * 4) as usize];
-
-        // Simple nearest-neighbor scaling for now
-        for y in 0..new_height {
-            for x in 0..new_width {
-                let src_x = ((x as f64) / scale) as u32;
-                let src_y = ((y as f64) / scale) as u32;
-
-                if src_x < capture_result.width && src_y < capture_result.height {
-                    let src_idx = ((src_y * capture_result.width + src_x) as usize) * 4;
-                    let dst_idx = ((y * new_width + x) as usize) * 4;
-
-                    scaled_data[dst_idx] = capture_result.data[src_idx]; // R
-                    scaled_data[dst_idx + 1] = capture_result.data[src_idx + 1]; // G
-                    scaled_data[dst_idx + 2] = capture_result.data[src_idx + 2]; // B
-                    scaled_data[dst_idx + 3] = capture_result.data[src_idx + 3]; // A
-                }
-            }
+        if new_width == 0 || new_height == 0 {
+            return Err(Error::InvalidRegion("Scaled dimensions must be positive".to_string()));
         }
 
+        // Use image crate for high-quality scaling
+        use image::{ ImageBuffer, Rgba, imageops };
+
+        // Convert raw RGBA data to ImageBuffer
+        let img = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_raw(
+            old_width,
+            old_height,
+            capture_result.data
+        ).ok_or_else(|| Error::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Failed to create image buffer"
+        )))?;
+
+        // Choose filter based on scale factor:
+        // - Lanczos3 for significant downscaling (scale < 0.75) for better quality
+        // - Triangle (bilinear) for other cases (faster, good quality)
+        let filter = if scale < 0.75 {
+            imageops::FilterType::Lanczos3
+        } else {
+            imageops::FilterType::Triangle // Bilinear interpolation
+        };
+
+        // Resize with chosen filter
+        let scaled_img = imageops::resize(&img, new_width, new_height, filter);
+
         Ok(CaptureResult {
-            data: scaled_data,
+            data: scaled_img.into_raw(),
             width: new_width,
             height: new_height,
         })
