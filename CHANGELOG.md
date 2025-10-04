@@ -24,17 +24,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - `is_grid_aligned()` - now uses logical dimensions for layout analysis
     - `capture_all()` and `capture_all_with_scale()` - calculate bounding box using logical coordinates
 
-### Added
-- **Second Monitor Demo Example**: New comprehensive example (`examples/second_monitor_demo.rs`) demonstrating various capture techniques for the second monitor
-  - Full second monitor capture in multiple scales (1.0x, 0.5x, 0.25x, 0.75x)
-  - Region captures: top-left corner, center, bottom-right corner
-  - Strip captures: horizontal and vertical strips
-  - Grid capture: 4×4 grid of small captures (16 images total)
-  - Format demonstrations: PNG with different compression levels, JPEG with quality settings, PPM
-  - In-memory format conversions without file I/O
-  - Useful for testing and learning multi-monitor screenshot workflows
-  - Requirements: At least 2 monitors must be connected
-
 ### Performance
 - Multi-monitor capture now correctly positions images without overlapping, resulting in expected memory usage and correct visual output
 
