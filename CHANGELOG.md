@@ -40,6 +40,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Correct identification of layouts suitable for optimization
     - Foundation for future optimizations (e.g., parallel capture)
     - Better performance for standard multi-monitor setups
+- **Enhanced Error Handling**: Improved error messages with detailed context information
+  - New error types: `TransformNotSupported`, `InvertFailed`, `ScalingFailed`, `IoWithContext`
+  - Buffer creation errors now include specific failure details and affected output names
+  - File I/O errors now include operation context and file paths
+  - Scaling errors include source and target dimensions for better debugging
 
 ### Changed
 - **Multi-Monitor Compositing**: Simplified `capture_region()` implementation

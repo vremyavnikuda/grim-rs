@@ -248,8 +248,12 @@ impl Grim {
     /// use grim_rs::Grim;
     ///
     /// let mut grim = Grim::new()?;
-    /// let result = grim.capture_output("eDP-1")?;
-    /// println!("Captured output: {}x{}", result.width, result.height);
+    /// // Get available outputs first
+    /// let outputs = grim.get_outputs()?;
+    /// if let Some(output) = outputs.first() {
+    ///     let result = grim.capture_output(&output.name)?;
+    ///     println!("Captured output: {}x{}", result.width, result.height);
+    /// }
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
     pub fn capture_output(&mut self, output_name: &str) -> Result<CaptureResult> {
@@ -278,8 +282,12 @@ impl Grim {
     /// use grim_rs::Grim;
     ///
     /// let mut grim = Grim::new()?;
-    /// let result = grim.capture_output_with_scale("eDP-1", 1.0)?;
-    /// println!("Captured output: {}x{}", result.width, result.height);
+    /// // Get available outputs first
+    /// let outputs = grim.get_outputs()?;
+    /// if let Some(output) = outputs.first() {
+    ///     let result = grim.capture_output_with_scale(&output.name, 0.5)?;
+    ///     println!("Captured output at 50% scale: {}x{}", result.width, result.height);
+    /// }
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
     pub fn capture_output_with_scale(
@@ -538,7 +546,10 @@ impl Grim {
             )?;
 
         // Create PNG encoder with compression settings
-        let file = std::fs::File::create(path)?;
+        let file = std::fs::File::create(&path).map_err(|e| Error::IoWithContext {
+            operation: format!("creating output file '{}'", path.as_ref().display()),
+            source: e,
+        })?;
         let writer = BufWriter::new(file);
         let mut encoder = png::Encoder::new(writer, width, height);
 
@@ -703,7 +714,10 @@ impl Grim {
         let rgb_img: ImageBuffer<Rgb<u8>, Vec<u8>> = rgba_img.convert();
 
         // Create encoder with quality setting - the quality parameter is part of the constructor
-        let mut output_file = std::fs::File::create(path)?;
+        let mut output_file = std::fs::File::create(&path).map_err(|e| Error::IoWithContext {
+            operation: format!("creating output file '{}'", path.as_ref().display()),
+            source: e,
+        })?;
         let mut _encoder = jpeg_encoder::Encoder::new(&mut output_file, quality);
         let rgb_data = rgb_img.as_raw();
 
@@ -1128,7 +1142,10 @@ impl Grim {
         path: P
     ) -> Result<()> {
         let ppm_data = self.to_ppm(data, width, height)?;
-        std::fs::write(path, ppm_data)?;
+        std::fs::write(&path, ppm_data).map_err(|e| Error::IoWithContext {
+            operation: format!("writing PPM data to file '{}'", path.as_ref().display()),
+            source: e,
+        })?;
         Ok(())
     }
 
@@ -1194,9 +1211,10 @@ impl Grim {
     /// # Example
     ///
     /// ```rust
-    /// use grim_rs::Grim;
+    /// use grim_rs::{Grim, Box};
     ///
-    /// let region = Grim::read_region_from_stdin()?;
+    /// // Parse region from string (same format as stdin would provide)
+    /// let region = "100,100 800x600".parse::<Box>()?;
     /// println!("Region: {}", region);
     /// # Ok::<(), grim_rs::Error>(())
     /// ```

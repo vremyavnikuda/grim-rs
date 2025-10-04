@@ -543,13 +543,19 @@ impl WaylandCapture {
             (width, height, stride, size, format)
         };
 
-        let mut tmp_file = tempfile::NamedTempFile::new().map_err(|_e| Error::BufferCreation)?;
+        let mut tmp_file = tempfile::NamedTempFile
+            ::new()
+            .map_err(|e| Error::BufferCreation(format!("failed to create temporary file: {}", e)))?;
         tmp_file
             .as_file_mut()
             .set_len(size as u64)
-            .map_err(|_e| Error::BufferCreation)?;
+            .map_err(|e|
+                Error::BufferCreation(format!("failed to resize buffer to {} bytes: {}", size, e))
+            )?;
         let mmap = unsafe {
-            memmap2::MmapMut::map_mut(&tmp_file).map_err(|_e| Error::BufferCreation)?
+            memmap2::MmapMut
+                ::map_mut(&tmp_file)
+                .map_err(|e| Error::BufferCreation(format!("failed to memory-map buffer: {}", e)))?
         };
 
         let pool = shm.create_pool(
@@ -887,10 +893,13 @@ impl WaylandCapture {
         let img = ImageBuffer::<Rgba<u8>, Vec<u8>>
             ::from_raw(old_width, old_height, capture_result.data)
             .ok_or_else(||
-                Error::Io(
-                    std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        "Failed to create image buffer"
+                Error::ScalingFailed(
+                    format!(
+                        "failed to create image buffer for scaling {}x{} -> {}x{}",
+                        old_width,
+                        old_height,
+                        new_width,
+                        new_height
                     )
                 )
             )?;
@@ -1023,13 +1032,42 @@ impl WaylandCapture {
                 let size = (stride * height) as usize;
                 (width, height, stride, size)
             };
-            let mut tmp_file = tempfile::NamedTempFile::new().map_err(|_e| Error::BufferCreation)?;
+            let mut tmp_file = tempfile::NamedTempFile
+                ::new()
+                .map_err(|e|
+                    Error::BufferCreation(
+                        format!(
+                            "failed to create temporary file for output '{}': {}",
+                            output_name,
+                            e
+                        )
+                    )
+                )?;
             tmp_file
                 .as_file_mut()
                 .set_len(size as u64)
-                .map_err(|_e| Error::BufferCreation)?;
+                .map_err(|e|
+                    Error::BufferCreation(
+                        format!(
+                            "failed to resize buffer for output '{}' to {} bytes: {}",
+                            output_name,
+                            size,
+                            e
+                        )
+                    )
+                )?;
             let mmap = unsafe {
-                memmap2::MmapMut::map_mut(&tmp_file).map_err(|_e| Error::BufferCreation)?
+                memmap2::MmapMut
+                    ::map_mut(&tmp_file)
+                    .map_err(|e|
+                        Error::BufferCreation(
+                            format!(
+                                "failed to memory-map buffer for output '{}': {}",
+                                output_name,
+                                e
+                            )
+                        )
+                    )?
             };
             // Access shm after event dispatch to avoid borrowing conflicts
             let shm = self.globals.shm
@@ -1105,10 +1143,10 @@ impl WaylandCapture {
             };
             let mut buffer_data = mmap.to_vec();
             if
-                let Some(format) = ({
+                let Some(format) = {
                     let state = frame_state.lock().unwrap();
                     state.format
-                })
+                }
             {
                 match format {
                     ShmFormat::Xrgb8888 => {
