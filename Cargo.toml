@@ -1,6 +1,6 @@
 [package]
 name = "grim-rs"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Rust implementation of grim screenshot utility for Wayland"
 license-file = "LICENSE"
@@ -17,8 +17,14 @@ authors = ["vremyavnikuda <hopperplayer0@gmail.com>"]
 name = "grim_rs"
 crate-type = ["lib"]
 
+[[bin]]
+name = "grim-rs"
+path = "src/bin/grim.rs"
+
 [dependencies]
 image = { version = "0.25", features = ["png"] }
+jpeg-encoder = { version = "0.6", optional = true }
+png = { version = "0.17", optional = true }
 thiserror = "1.0"
 anyhow = "1.0"
 wayland-client = "0.31"
@@ -27,11 +33,14 @@ wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 memmap2 = "0.9"
 tempfile = "3.10"
 log = "0.4"
+env_logger = "0.10"
+chrono = "0.4"
 
 [dev-dependencies]
 env_logger = "0.10"
+regex = "1.10"
 
 [features]
-default = ["png", "jpeg"]
-png = ["image/png"]
-jpeg = ["image/jpeg"]
+default = ["png_support", "jpeg"]
+png_support = ["png"]
+jpeg = ["image/jpeg", "jpeg-encoder", "png_support"]
