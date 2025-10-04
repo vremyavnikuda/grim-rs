@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.2] - 2025-10-04
 
-### Fixed
+### Fixed issues: [#2](https://github.com/vremyavnikuda/grim-rs/issues/2)
 - **Multi-Monitor Capture Compositing**: Fixed critical issue where capturing multiple monitors would overlay images on top of each other instead of placing them side-by-side
   - Root cause: Mixing of logical and physical coordinates during image composition
   - Solution: Proper coordinate transformation between logical and physical spaces with scale factor handling
