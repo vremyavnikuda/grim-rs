@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2025-10-04
+
+### Fixed
+- **Multi-Monitor Capture Compositing**: Fixed critical issue where capturing multiple monitors would overlay images on top of each other instead of placing them side-by-side
+  - Root cause: Mixing of logical and physical coordinates during image composition
+  - Solution: Proper coordinate transformation between logical and physical spaces with scale factor handling
+  - The fix ensures correct layout for multi-monitor setups:
+    - Before: Two monitors (3440x1440 + 1920x1080) created overlapped images
+    - After: Correctly creates 5360x1440 pixel image with monitors side-by-side
+  - Changes in `composite_region()`:
+    - Convert logical coordinates to physical coordinates before capture (multiply by scale factor)
+    - Capture images in physical pixel space
+    - Scale captured images back to logical size for proper composition
+    - Composite in logical coordinate space with correct offsets
+  - Updated helper functions to use logical coordinates consistently:
+    - `check_outputs_overlap()` - now uses logical dimensions for overlap detection
+    - `is_grid_aligned()` - now uses logical dimensions for layout analysis
+    - `capture_all()` and `capture_all_with_scale()` - calculate bounding box using logical coordinates
+
+### Added
+- **Second Monitor Demo Example**: New comprehensive example (`examples/second_monitor_demo.rs`) demonstrating various capture techniques for the second monitor
+  - Full second monitor capture in multiple scales (1.0x, 0.5x, 0.25x, 0.75x)
+  - Region captures: top-left corner, center, bottom-right corner
+  - Strip captures: horizontal and vertical strips
+  - Grid capture: 4×4 grid of small captures (16 images total)
+  - Format demonstrations: PNG with different compression levels, JPEG with quality settings, PPM
+  - In-memory format conversions without file I/O
+  - Useful for testing and learning multi-monitor screenshot workflows
+  - Requirements: At least 2 monitors must be connected
+
+### Performance
+- Multi-monitor capture now correctly positions images without overlapping, resulting in expected memory usage and correct visual output
+
 ## [0.1.1] - 2025-10-04
 
 ### Added
