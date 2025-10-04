@@ -16,13 +16,19 @@
 //!
 //! ## Example
 //!
-//! ```rust
+//! ```rust,no_run
 //! use grim_rs::Grim;
+//! use chrono::Local;
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let mut grim = Grim::new()?;
 //! let result = grim.capture_all()?;
-//! grim.save_png(&result.data, result.width, result.height, "screenshot.png")?;
-//! # Ok::<(), grim_rs::Error>(())
+//! 
+//! // Generate timestamped filename (like grim-rs does by default)
+//! let filename = format!("{}_grim.png", Local::now().format("%Y%m%d_%Hh%Mm%Ss"));
+//! grim.save_png(&result.data, result.width, result.height, &filename)?;
+//! # Ok(())
+//! # }
 //! ```
 
 pub mod error;
@@ -450,13 +456,19 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use grim_rs::Grim;
+    /// use chrono::Local;
     ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
-    /// grim.save_png(&result.data, result.width, result.height, "screenshot.png")?;
-    /// # Ok::<(), grim_rs::Error>(())
+    /// 
+    /// // Generate timestamped filename
+    /// let filename = format!("{}_grim.png", Local::now().format("%Y%m%d_%Hh%Mm%Ss"));
+    /// grim.save_png(&result.data, result.width, result.height, &filename)?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn save_png<P: AsRef<std::path::Path>>(
         &self,
@@ -488,13 +500,19 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use grim_rs::Grim;
+    /// use chrono::Local;
     ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
-    /// grim.save_png_with_compression(&result.data, result.width, result.height, "screenshot.png", 9)?;
-    /// # Ok::<(), grim_rs::Error>(())
+    /// 
+    /// // Generate timestamped filename
+    /// let filename = format!("{}_grim.png", Local::now().format("%Y%m%d_%Hh%Mm%Ss"));
+    /// grim.save_png_with_compression(&result.data, result.width, result.height, &filename, 9)?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn save_png_with_compression<P: AsRef<std::path::Path>>(
         &self,
@@ -596,13 +614,19 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use grim_rs::Grim;
+    /// use chrono::Local;
     ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
-    /// grim.save_jpeg(&result.data, result.width, result.height, "screenshot.jpg")?;
-    /// # Ok::<(), grim_rs::Error>(())
+    /// 
+    /// // Generate timestamped filename
+    /// let filename = format!("{}_grim.jpg", Local::now().format("%Y%m%d_%Hh%Mm%Ss"));
+    /// grim.save_jpeg(&result.data, result.width, result.height, &filename)?;
+    /// # Ok(())
+    /// # }
     /// ```
     #[cfg(feature = "jpeg")]
     pub fn save_jpeg<P: AsRef<std::path::Path>>(
@@ -638,13 +662,19 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use grim_rs::Grim;
+    /// use chrono::Local;
     ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
-    /// grim.save_jpeg_with_quality(&result.data, result.width, result.height, "screenshot.jpg", 90)?;
-    /// # Ok::<(), grim_rs::Error>(())
+    /// 
+    /// // Generate timestamped filename
+    /// let filename = format!("{}_grim.jpg", Local::now().format("%Y%m%d_%Hh%Mm%Ss"));
+    /// grim.save_jpeg_with_quality(&result.data, result.width, result.height, &filename, 90)?;
+    /// # Ok(())
+    /// # }
     /// ```
     #[cfg(feature = "jpeg")]
     pub fn save_jpeg_with_quality<P: AsRef<std::path::Path>>(
@@ -1076,13 +1106,19 @@ impl Grim {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use grim_rs::Grim;
+    /// use chrono::Local;
     ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
-    /// grim.save_ppm(&result.data, result.width, result.height, "screenshot.ppm")?;
-    /// # Ok::<(), grim_rs::Error>(())
+    /// 
+    /// // Generate timestamped filename
+    /// let filename = format!("{}_grim.ppm", Local::now().format("%Y%m%d_%Hh%Mm%Ss"));
+    /// grim.save_ppm(&result.data, result.width, result.height, &filename)?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn save_ppm<P: AsRef<std::path::Path>>(
         &self,
