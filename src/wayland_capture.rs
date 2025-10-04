@@ -281,18 +281,18 @@ fn blit_capture(
 fn check_outputs_overlap(outputs: &[(WlOutput, OutputInfo)]) -> bool {
     for i in 0..outputs.len() {
         let box1 = Box::new(
-            outputs[i].1.x,
-            outputs[i].1.y,
-            outputs[i].1.width,
-            outputs[i].1.height
+            outputs[i].1.logical_x,
+            outputs[i].1.logical_y,
+            outputs[i].1.logical_width,
+            outputs[i].1.logical_height
         );
 
         for j in i + 1..outputs.len() {
             let box2 = Box::new(
-                outputs[j].1.x,
-                outputs[j].1.y,
-                outputs[j].1.width,
-                outputs[j].1.height
+                outputs[j].1.logical_x,
+                outputs[j].1.logical_y,
+                outputs[j].1.logical_width,
+                outputs[j].1.logical_height
             );
 
             if box1.intersects(&box2) {
@@ -313,7 +313,7 @@ fn is_grid_aligned(region: &Box, outputs: &[(WlOutput, OutputInfo)]) -> bool {
     }
 
     for (_, info) in outputs {
-        let output_box = Box::new(info.x, info.y, info.width, info.height);
+        let output_box = Box::new(info.logical_x, info.logical_y, info.logical_width, info.logical_height);
         if output_box.intersects(region) {
             continue;
         }
@@ -681,25 +681,30 @@ impl WaylandCapture {
         let _grid_aligned = is_grid_aligned(&region, outputs);
 
         for (output, info) in outputs {
-            let output_box = Box::new(info.x, info.y, info.width, info.height);
+            let output_box = Box::new(info.logical_x, info.logical_y, info.logical_width, info.logical_height);
             if let Some(intersection) = output_box.intersection(&region) {
                 if intersection.width <= 0 || intersection.height <= 0 {
                     continue;
                 }
 
-                let local_region = Box::new(
-                    intersection.x - info.x,
-                    intersection.y - info.y,
-                    intersection.width,
-                    intersection.height
+                let scale = info.scale as f64;
+                let physical_local_region = Box::new(
+                    ((intersection.x - info.logical_x) as f64 * scale) as i32,
+                    ((intersection.y - info.logical_y) as f64 * scale) as i32,
+                    (intersection.width as f64 * scale) as i32,
+                    (intersection.height as f64 * scale) as i32,
                 );
 
                 let output_handle = output.clone();
-                let capture = self.capture_region_for_output(
+                let mut capture = self.capture_region_for_output(
                     &output_handle,
-                    local_region,
+                    physical_local_region,
                     overlay_cursor
                 )?;
+
+                if scale != 1.0 {
+                    capture = self.scale_image_data(capture, 1.0 / scale)?;
+                }
 
                 let offset_x = (intersection.x - region.x) as usize;
                 let offset_y = (intersection.y - region.y) as usize;
@@ -758,16 +763,16 @@ impl WaylandCapture {
         }
 
         let (_, first_info) = &snapshot[0];
-        let mut min_x = first_info.x;
-        let mut min_y = first_info.y;
-        let mut max_x = first_info.x + first_info.width;
-        let mut max_y = first_info.y + first_info.height;
+        let mut min_x = first_info.logical_x;
+        let mut min_y = first_info.logical_y;
+        let mut max_x = first_info.logical_x + first_info.logical_width;
+        let mut max_y = first_info.logical_y + first_info.logical_height;
 
         for (_, info) in &snapshot {
-            min_x = min_x.min(info.x);
-            min_y = min_y.min(info.y);
-            max_x = max_x.max(info.x + info.width);
-            max_y = max_y.max(info.y + info.height);
+            min_x = min_x.min(info.logical_x);
+            min_y = min_y.min(info.logical_y);
+            max_x = max_x.max(info.logical_x + info.logical_width);
+            max_y = max_y.max(info.logical_y + info.logical_height);
         }
 
         let region = Box::new(min_x, min_y, max_x - min_x, max_y - min_y);
@@ -782,16 +787,16 @@ impl WaylandCapture {
         }
 
         let (_, first_info) = &snapshot[0];
-        let mut min_x = first_info.x;
-        let mut min_y = first_info.y;
-        let mut max_x = first_info.x + first_info.width;
-        let mut max_y = first_info.y + first_info.height;
+        let mut min_x = first_info.logical_x;
+        let mut min_y = first_info.logical_y;
+        let mut max_x = first_info.logical_x + first_info.logical_width;
+        let mut max_y = first_info.logical_y + first_info.logical_height;
 
         for (_, info) in &snapshot {
-            min_x = min_x.min(info.x);
-            min_y = min_y.min(info.y);
-            max_x = max_x.max(info.x + info.width);
-            max_y = max_y.max(info.y + info.height);
+            min_x = min_x.min(info.logical_x);
+            min_y = min_y.min(info.logical_y);
+            max_x = max_x.max(info.logical_x + info.logical_width);
+            max_y = max_y.max(info.logical_y + info.logical_height);
         }
 
         let scaled_width = (((max_x - min_x) as f64) * scale) as i32;
