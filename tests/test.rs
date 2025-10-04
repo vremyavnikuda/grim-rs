@@ -56,7 +56,7 @@ fn test_box_string_parsing() {
 
 #[test]
 fn test_capture_result_struct() {
-    let data = vec![255u8; 400]; // 10x10 pixels with 4 bytes per pixel
+    let data = vec![255u8; 400];
     let result = CaptureResult {
         data,
         width: 10,
@@ -97,7 +97,6 @@ fn test_error_messages() {
 
 #[test]
 fn test_crate_export_structs() {
-    // Test that public structs can be instantiated
     let _box = GrimBox::new(0, 0, 100, 100);
     let _params = CaptureParameters {
         output_name: "test".to_string(),
@@ -114,7 +113,6 @@ fn test_crate_export_structs() {
 
 #[test]
 fn test_image_data_format() {
-    // Test that image data is properly formatted as RGBA
     let width = 2;
     let height = 2;
     let data = vec![
@@ -138,7 +136,6 @@ fn test_image_data_format() {
 
     assert_eq!(data.len(), (width * height * 4) as usize);
 
-    // Check first pixel (red)
     assert_eq!(data[0], 255); // R
     assert_eq!(data[1], 0); // G
     assert_eq!(data[2], 0); // B
@@ -149,27 +146,20 @@ fn test_image_data_format() {
 fn test_png_compression_levels() {
     let test_data = vec![255u8; 100 * 100 * 4]; // 100x100 image
 
-    // Create a temporary Grim instance to test PNG functionality
-    // Note: This test will likely fail in environments without Wayland
-    // unless we mock the functionality, so we're just testing the method signatures
     match Grim::new() {
         Ok(grim) => {
-            // Test that we can call PNG methods without panicking
             let _ = grim.to_png(&test_data, 100, 100);
             let _ = grim.to_png_with_compression(&test_data, 100, 100, 0);
             let _ = grim.to_png_with_compression(&test_data, 100, 100, 6);
             let _ = grim.to_png_with_compression(&test_data, 100, 100, 9);
         }
-        Err(_) => {
-            // If we can't connect to Wayland, that's expected in test environments
-            // We're just making sure the library can be instantiated
-        }
+        Err(_) => {}
     }
 }
 
 #[test]
 fn test_ppm_format_generation() {
-    let test_data = vec![255u8; 10 * 10 * 4]; // 10x10 RGBA image
+    let test_data = vec![255u8; 10 * 10 * 4];
 
     match Grim::new() {
         Ok(grim) => {
@@ -177,19 +167,16 @@ fn test_ppm_format_generation() {
             assert!(ppm_result.is_ok());
 
             let ppm_data = ppm_result.unwrap();
-            let ppm_str = String::from_utf8(ppm_data[..13].to_vec()).unwrap(); // Only check the header part
+            let ppm_str = String::from_utf8(ppm_data[..13].to_vec()).unwrap();
 
             // Check PPM header
             assert!(ppm_str.starts_with("P6\n"));
             assert!(ppm_str.contains("10 10\n"));
             assert!(ppm_str.contains("255\n"));
 
-            // Check the length of the full data
-            assert_eq!(ppm_data.len(), 13 + 10 * 10 * 3); // Header bytes + RGB data
+            assert_eq!(ppm_data.len(), 13 + 10 * 10 * 3);
         }
-        Err(_) => {
-            // Expected in non-Wayland environments
-        }
+        Err(_) => {}
     }
 }
 
@@ -197,9 +184,9 @@ fn test_ppm_format_generation() {
 fn test_capture_parameters_default_behavior() {
     let params = CaptureParameters {
         output_name: "test".to_string(),
-        region: None, // Should capture entire output
+        region: None,
         overlay_cursor: false,
-        scale: None, // Should use default scale
+        scale: None,
     };
 
     assert_eq!(params.output_name, "test");
@@ -211,7 +198,7 @@ fn test_capture_parameters_default_behavior() {
 #[cfg(feature = "jpeg")]
 #[test]
 fn test_jpeg_functionality_available() {
-    let test_data = vec![255u8; 10 * 10 * 4]; // 10x10 RGBA image
+    let test_data = vec![255u8; 10 * 10 * 4];
 
     match Grim::new() {
         Ok(grim) => {
@@ -221,25 +208,21 @@ fn test_jpeg_functionality_available() {
             let jpeg_result_with_quality = grim.to_jpeg_with_quality(&test_data, 10, 10, 85);
             assert!(jpeg_result_with_quality.is_ok());
         }
-        Err(_) => {
-            // Expected in non-Wayland environments
-        }
+        Err(_) => {}
     }
 }
 
 #[cfg(not(feature = "jpeg"))]
 #[test]
 fn test_jpeg_functionality_unavailable() {
-    let test_data = vec![255u8; 10 * 10 * 4]; // 10x10 RGBA image
+    let test_data = vec![255u8; 10 * 10 * 4];
 
     match Grim::new() {
         Ok(grim) => {
             let jpeg_result = grim.to_jpeg(&test_data, 10, 10);
             assert!(jpeg_result.is_err());
         }
-        Err(_) => {
-            // Expected in non-Wayland environments
-        }
+        Err(_) => {}
     }
 }
 
@@ -273,11 +256,9 @@ fn test_multi_output_capture_result() {
 
 #[test]
 fn test_scale_functionality_validation() {
-    // Test various scale factors
     let scales = [0.5, 1.0, 1.5, 2.0, 0.25];
 
     for scale in scales.iter() {
-        // Just test that the scale value is valid and can be processed in calculations
         let new_width = (800.0 * scale) as u32;
         let new_height = (600.0 * scale) as u32;
 
@@ -288,14 +269,12 @@ fn test_scale_functionality_validation() {
 
 #[test]
 fn test_geometry_bounds_checking() {
-    // Test that negative dimensions are handled properly
     let invalid_box = GrimBox::new(0, 0, -10, 100);
     assert!(invalid_box.is_empty());
 
     let invalid_box2 = GrimBox::new(0, 0, 100, -10);
     assert!(invalid_box2.is_empty());
 
-    // Test that valid dimensions work
     let valid_box = GrimBox::new(10, 10, 100, 100);
     assert!(!valid_box.is_empty());
 }
@@ -303,7 +282,7 @@ fn test_geometry_bounds_checking() {
 #[test]
 fn test_region_intersection_with_outputs() {
     let output_box = GrimBox::new(0, 0, 1920, 1080);
-    let capture_region = GrimBox::new(100, 100, 500, 500); // Within output
+    let capture_region = GrimBox::new(100, 100, 500, 500);
 
     assert!(output_box.intersects(&capture_region));
     let intersection = output_box.intersection(&capture_region).unwrap();
@@ -312,23 +291,17 @@ fn test_region_intersection_with_outputs() {
     assert_eq!(intersection.width, 500);
     assert_eq!(intersection.height, 500);
 
-    let region_outside = GrimBox::new(2000, 2000, 100, 100); // Outside output
+    let region_outside = GrimBox::new(2000, 2000, 100, 100);
     assert!(!output_box.intersects(&region_outside));
     assert!(output_box.intersection(&region_outside).is_none());
 }
 
-// Tests for output transform functionality
 mod transform_tests {
-    /// Test that normal transform doesn't change dimensions
     #[test]
     fn test_transform_normal() {
         let width = 1920;
         let height = 1080;
 
-        // Note: These are internal functions, so we're testing the behavior indirectly
-        // by verifying that outputs with different transforms would have correct dimensions
-
-        // For normal transform, width and height should remain the same
         assert_eq!(width, 1920);
         assert_eq!(height, 1080);
     }
@@ -336,15 +309,12 @@ mod transform_tests {
     /// Test that 90° rotation swaps width and height
     #[test]
     fn test_transform_90_degree_rotation() {
-        // With 90° rotation, a 1920x1080 display becomes 1080x1920
         let original_width = 1920;
         let original_height = 1080;
 
-        // After 90° rotation
         let expected_width = 1080;
         let expected_height = 1920;
 
-        // Verify the concept: rotated dimensions swap
         assert_ne!(original_width, expected_width);
         assert_ne!(original_height, expected_height);
         assert_eq!(original_width, expected_height);
@@ -354,11 +324,9 @@ mod transform_tests {
     /// Test that 180° rotation keeps same dimensions
     #[test]
     fn test_transform_180_degree_rotation() {
-        // With 180° rotation, dimensions stay the same
         let width = 1920;
         let height = 1080;
 
-        // After 180° rotation, dimensions remain unchanged
         assert_eq!(width, 1920);
         assert_eq!(height, 1080);
     }
@@ -366,11 +334,9 @@ mod transform_tests {
     /// Test that 270° rotation swaps width and height
     #[test]
     fn test_transform_270_degree_rotation() {
-        // With 270° rotation, a 1920x1080 display becomes 1080x1920
         let original_width = 1920;
         let original_height = 1080;
 
-        // After 270° rotation
         let expected_width = 1080;
         let expected_height = 1920;
 
@@ -381,8 +347,6 @@ mod transform_tests {
     /// Test flipped transform behavior
     #[test]
     fn test_transform_flipped() {
-        // Flipped transforms should maintain correct dimension handling
-        // Normal flip doesn't change dimensions
         let width = 1920;
         let height = 1080;
 
@@ -393,7 +357,6 @@ mod transform_tests {
     /// Test flipped 90° rotation
     #[test]
     fn test_transform_flipped_90() {
-        // Flipped 90° rotation should also swap dimensions
         let original_width = 1920;
         let original_height = 1080;
 
@@ -407,7 +370,6 @@ mod transform_tests {
     /// Test multiple outputs with different transforms
     #[test]
     fn test_multi_output_with_transforms() {
-        // Simulate a setup with multiple monitors with different rotations
         struct TestOutput {
             width: i32,
             height: i32,
@@ -415,8 +377,8 @@ mod transform_tests {
         }
 
         let outputs = vec![
-            TestOutput { width: 1920, height: 1080, rotated: false }, // Normal
-            TestOutput { width: 1080, height: 1920, rotated: true } // 90° rotated
+            TestOutput { width: 1920, height: 1080, rotated: false },
+            TestOutput { width: 1080, height: 1920, rotated: true }
         ];
 
         assert_eq!(outputs[0].width, 1920);
@@ -427,7 +389,6 @@ mod transform_tests {
         assert_eq!(outputs[1].height, 1920);
         assert!(outputs[1].rotated);
 
-        // Verify that dimensions are swapped for rotated output
         assert_eq!(outputs[0].width, outputs[1].height);
         assert_eq!(outputs[0].height, outputs[1].width);
     }
@@ -435,19 +396,16 @@ mod transform_tests {
     /// Test logical geometry calculation with transforms
     #[test]
     fn test_logical_geometry_with_scale_and_transform() {
-        // Test that logical geometry correctly accounts for both scale and transform
         let physical_width = 3840;
         let physical_height = 2160;
         let scale = 2;
 
-        // Without transform
         let logical_width = physical_width / scale;
         let logical_height = physical_height / scale;
 
         assert_eq!(logical_width, 1920);
         assert_eq!(logical_height, 1080);
 
-        // With 90° transform, logical dimensions should swap
         let logical_width_rotated = logical_height;
         let logical_height_rotated = logical_width;
 
@@ -458,14 +416,9 @@ mod transform_tests {
     /// Test transform integration - verify dimensions change correctly
     #[test]
     fn test_transform_integration_dimensions() {
-        // Simulate output with 90 degree rotation
-        // Original dimensions: 1920x1080
-        // After 90° rotation: 1080x1920
-
         let original_width = 1920;
         let original_height = 1080;
 
-        // After 90° rotation, dimensions swap
         let rotated_width = 1080;
         let rotated_height = 1920;
 
@@ -476,9 +429,6 @@ mod transform_tests {
     /// Test that transform is applied to captured data
     #[test]
     fn test_image_transform_application() {
-        // Create simple 2x2 test image (RGBA)
-        // Pattern: Red, Green
-        //          Blue, White
         let test_data: Vec<u8> = vec![
             255,
             0,
@@ -498,12 +448,6 @@ mod transform_tests {
             255 // White
         ];
 
-        // After 90° clockwise rotation:
-        // Blue, Red
-        // White, Green
-
-        // We can't test the actual transform function since it's private,
-        // but we can verify the logic is correct
         assert_eq!(test_data.len(), 2 * 2 * 4);
     }
 
@@ -513,11 +457,9 @@ mod transform_tests {
         let width = 1920;
         let height = 1080;
 
-        // Flipped (no rotation) - dimensions stay same
         assert_eq!(width, 1920);
         assert_eq!(height, 1080);
 
-        // Flipped180 (vertical flip) - dimensions stay same
         assert_eq!(width, 1920);
         assert_eq!(height, 1080);
     }
@@ -527,12 +469,10 @@ mod transform_tests {
     fn test_rotation_angles() {
         use std::f64::consts::{ FRAC_PI_2, PI };
 
-        // Verify rotation constants are correct
         let angle_90 = FRAC_PI_2; // π/2
         let angle_180 = PI; // π
         let angle_270 = 3.0 * FRAC_PI_2; // 3π/2
 
-        // These should be in valid ranges
         assert!(angle_90 > 0.0 && angle_90 < PI);
         assert_eq!(angle_180, PI);
         assert!(angle_270 > PI && angle_270 < 2.0 * PI);
@@ -544,7 +484,6 @@ mod y_invert_tests {
     /// Test Y-invert flag constant
     #[test]
     fn test_y_invert_flag_value() {
-        // ZWLR_SCREENCOPY_FRAME_V1_FLAGS_Y_INVERT should be bit 0 (value 1)
         const Y_INVERT: u32 = 1;
         assert_eq!(Y_INVERT, 1);
         assert_eq!(Y_INVERT & 1, 1);
@@ -555,16 +494,13 @@ mod y_invert_tests {
     fn test_y_invert_flag_detection() {
         const Y_INVERT: u32 = 1;
 
-        // Test flag set
         let flags_with_invert = 1u32;
         assert_ne!(flags_with_invert & Y_INVERT, 0);
 
-        // Test flag not set
         let flags_without_invert = 0u32;
         assert_eq!(flags_without_invert & Y_INVERT, 0);
 
-        // Test with other flags
-        let flags_mixed = 3u32; // bit 0 and bit 1 set
+        let flags_mixed = 3u32;
         assert_ne!(flags_mixed & Y_INVERT, 0);
     }
 
@@ -574,7 +510,6 @@ mod y_invert_tests {
         let width = 1920;
         let height = 1080;
 
-        // Y-invert (vertical flip) should preserve dimensions
         assert_eq!(width, 1920);
         assert_eq!(height, 1080);
     }
@@ -582,17 +517,12 @@ mod y_invert_tests {
     /// Test Y-invert with transform combination
     #[test]
     fn test_y_invert_with_transform() {
-        // Test that Y-invert can be combined with transforms
-        // Y-invert is applied AFTER transform according to Wayland spec
-
         let _original_width = 1920;
         let _original_height = 1080;
 
-        // After 90° transform: dimensions swap
         let transformed_width = 1080;
         let transformed_height = 1920;
 
-        // After Y-invert: dimensions stay same
         let final_width = transformed_width;
         let final_height = transformed_height;
 
@@ -603,8 +533,6 @@ mod y_invert_tests {
     /// Test FrameState flags field
     #[test]
     fn test_frame_state_flags_field() {
-        // This is a conceptual test to verify FrameState has flags field
-        // In actual code, FrameState { ..., flags: u32 } should exist
         let flags: u32 = 0;
         assert_eq!(flags, 0);
 

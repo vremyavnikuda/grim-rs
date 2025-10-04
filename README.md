@@ -33,7 +33,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-grim-rs = "0.1.0"
+grim-rs = "0.1.1"
 ```
 
 ### Basic Capture Operations

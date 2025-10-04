@@ -39,6 +39,7 @@ use std::os::fd::{ AsRawFd, BorrowedFd };
 const MAX_ATTEMPTS: usize = 100;
 
 /// Apply output transformation to width and height.
+/// 
 /// For 90° and 270° rotations, width and height are swapped.
 fn apply_output_transform(
     transform: wayland_client::protocol::wl_output::Transform,
@@ -68,6 +69,7 @@ fn get_output_rotation(transform: wayland_client::protocol::wl_output::Transform
 }
 
 /// Get flip multiplier for the given transform.
+/// 
 /// Returns -1 if flipped, 1 otherwise.
 fn get_output_flipped(transform: wayland_client::protocol::wl_output::Transform) -> i32 {
     use wayland_client::protocol::wl_output::Transform;
@@ -80,6 +82,7 @@ fn get_output_flipped(transform: wayland_client::protocol::wl_output::Transform)
 }
 
 /// Apply transform to captured image data based on rotation and flip.
+/// 
 /// This handles basic 90/180/270 degree rotations and horizontal flips.
 fn apply_image_transform(
     data: &[u8],
@@ -273,6 +276,7 @@ fn blit_capture(
 }
 
 /// Check if outputs have overlapping regions.
+/// 
 /// Returns true if any two outputs overlap.
 fn check_outputs_overlap(outputs: &[(WlOutput, OutputInfo)]) -> bool {
     for i in 0..outputs.len() {
@@ -301,21 +305,16 @@ fn check_outputs_overlap(outputs: &[(WlOutput, OutputInfo)]) -> bool {
 }
 
 /// Check if the layout is grid-aligned (outputs are pixel-aligned and don't overlap).
+/// 
 /// Grid-aligned layouts can use faster SRC compositing instead of OVER.
 fn is_grid_aligned(region: &Box, outputs: &[(WlOutput, OutputInfo)]) -> bool {
-    // Check if there are any overlapping outputs
     if check_outputs_overlap(outputs) {
         return false;
     }
 
-    // Check if all output boundaries within the region are pixel-aligned
-    // In our case, since coordinates are already i32, they are pixel-aligned by definition
-    // We just need to verify that outputs that intersect the region are properly aligned
     for (_, info) in outputs {
         let output_box = Box::new(info.x, info.y, info.width, info.height);
         if output_box.intersects(region) {
-            // All our coordinates are integers, so they're automatically grid-aligned
-            // The main check is just ensuring no overlaps (done above)
             continue;
         }
     }
@@ -331,13 +330,13 @@ struct OutputInfo {
     x: i32,
     y: i32,
     scale: i32,
-    transform: wayland_client::protocol::wl_output::Transform, // Output transformation
-    logical_x: i32, // From xdg_output protocol
-    logical_y: i32, // From xdg_output protocol
-    logical_width: i32, // From xdg_output protocol
-    logical_height: i32, // From xdg_output protocol
-    logical_scale_known: bool, // Whether we have xdg_output info
-    description: Option<String>, // Output description from wl_output or xdg_output
+    transform: wayland_client::protocol::wl_output::Transform,
+    logical_x: i32,
+    logical_y: i32,
+    logical_width: i32,
+    logical_height: i32,
+    logical_scale_known: bool,
+    description: Option<String>,
 }
 
 struct WaylandGlobals {
@@ -347,7 +346,7 @@ struct WaylandGlobals {
     xdg_output_manager: Option<ZxdgOutputManagerV1>,
     outputs: Vec<WlOutput>,
     output_info: HashMap<u32, OutputInfo>,
-    output_xdg_map: HashMap<u32, ZxdgOutputV1>, // Map from wl_output id to xdg_output
+    output_xdg_map: HashMap<u32, ZxdgOutputV1>,
 }
 
 pub struct WaylandCapture {
@@ -401,10 +400,8 @@ impl WaylandCapture {
         let mut event_queue = self._connection.new_event_queue();
         let qh = event_queue.handle();
 
-        // Re-get registry to bind outputs with the current queue
         let _registry = self._connection.display().get_registry(&qh, ());
 
-        // First roundtrip to get the registry globals
         event_queue
             .roundtrip(self)
             .map_err(|e| {
@@ -414,8 +411,6 @@ impl WaylandCapture {
             return Err(Error::NoOutputs);
         }
 
-        // Second and third roundtrips to ensure all output events are processed
-        // Some compositors need multiple roundtrips for Mode/Geometry events
         for _ in 0..2 {
             event_queue
                 .roundtrip(self)
@@ -526,7 +521,6 @@ impl WaylandCapture {
             attempts += 1;
         }
 
-        // Now we can safely access shm after the dispatch loop
         let shm = self.globals.shm
             .as_ref()
             .ok_or_else(|| Error::UnsupportedProtocol("wl_shm not available".to_string()))?;
@@ -623,7 +617,6 @@ impl WaylandCapture {
             _ => {}
         }
 
-        // Apply output transform if needed
         let output_id = output.id().protocol_id();
         let mut final_data = buffer_data;
         let mut final_width = width;
@@ -643,7 +636,6 @@ impl WaylandCapture {
             }
         }
 
-        // Apply Y-invert if the flag is set
         let flags = {
             let state = frame_state.lock().unwrap();
             state.flags
@@ -686,17 +678,7 @@ impl WaylandCapture {
         let mut dest = vec![0u8; dest_width * dest_height * 4];
         let mut any_capture = false;
 
-        // Check if the layout is grid-aligned (no overlaps, pixel-aligned boundaries)
-        // Grid-aligned layouts allow for optimized SRC-mode compositing
         let _grid_aligned = is_grid_aligned(&region, outputs);
-
-        // Note: When grid_aligned is true, we know outputs don't overlap, which means:
-        // 1. Each pixel in the destination is written exactly once (no blending needed)
-        // 2. We can use direct copy (SRC mode) instead of OVER mode
-        // 3. This is automatically achieved by our current blit_capture implementation
-        //    which does direct memory copy without alpha blending
-        // The main benefit is that we can skip overlap checks in the future or
-        // potentially parallelize captures (future optimization)
 
         for (output, info) in outputs {
             let output_box = Box::new(info.x, info.y, info.width, info.height);
@@ -722,10 +704,6 @@ impl WaylandCapture {
                 let offset_x = (intersection.x - region.x) as usize;
                 let offset_y = (intersection.y - region.y) as usize;
 
-                // For grid-aligned layouts, this is SRC-mode copy (no blending)
-                // For overlapping layouts, this would need alpha blending (OVER mode)
-                // Currently we always use direct copy, which is correct for grid-aligned
-                // and acceptable for most non-grid-aligned cases (last write wins)
                 blit_capture(&mut dest, dest_width, dest_height, &capture, offset_x, offset_y);
                 any_capture = true;
             }
@@ -752,7 +730,6 @@ impl WaylandCapture {
         let outputs = snapshot
             .into_iter()
             .map(|(_, info)| {
-                // Use logical geometry if xdg_output is available, otherwise use physical
                 let (x, y, width, height) = if info.logical_scale_known {
                     (info.logical_x, info.logical_y, info.logical_width, info.logical_height)
                 } else {
@@ -817,20 +794,16 @@ impl WaylandCapture {
             max_y = max_y.max(info.y + info.height);
         }
 
-        // Calculate scaled dimensions
         let scaled_width = (((max_x - min_x) as f64) * scale) as i32;
         let scaled_height = (((max_y - min_y) as f64) * scale) as i32;
         let _scaled_region = Box::new(min_x, min_y, scaled_width, scaled_height);
 
-        // For now, we'll composite at original size and then scale the final result
-        // This is a simplified approach - in a full implementation, we'd scale during capture
         let original_result = self.composite_region(
             Box::new(min_x, min_y, max_x - min_x, max_y - min_y),
             &snapshot,
             false
         )?;
 
-        // Scale the result
         self.scale_image_data(original_result, scale)
     }
 
@@ -888,10 +861,8 @@ impl WaylandCapture {
             return Err(Error::InvalidRegion("Scaled dimensions must be positive".to_string()));
         }
 
-        // Use image crate for high-quality scaling
         use image::{ ImageBuffer, Rgba, imageops };
 
-        // Convert raw RGBA data to ImageBuffer
         let img = ImageBuffer::<Rgba<u8>, Vec<u8>>
             ::from_raw(old_width, old_height, capture_result.data)
             .ok_or_else(||
@@ -906,26 +877,16 @@ impl WaylandCapture {
                 )
             )?;
 
-        // Choose filter based on scale factor for optimal quality/performance balance:
-        // - Upscaling (>1.0): Triangle (bilinear) - smooth, avoids pixelation
-        // - Mild downscaling (0.75-1.0): Triangle - fast, good quality
-        // - Moderate downscaling (0.5-0.75): CatmullRom - sharper than Triangle, faster than Lanczos3
-        // - Heavy downscaling (<0.5): Lanczos3 - best quality for extreme reduction
         let filter = if scale > 1.0 {
-            // Upscaling: Triangle provides smooth interpolation
             imageops::FilterType::Triangle
         } else if scale >= 0.75 {
-            // Mild downscaling: Triangle is fast and produces good results
             imageops::FilterType::Triangle
         } else if scale >= 0.5 {
-            // Moderate downscaling: CatmullRom offers sharp results with good performance
             imageops::FilterType::CatmullRom
         } else {
-            // Heavy downscaling: Lanczos3 provides the best quality
             imageops::FilterType::Lanczos3
         };
 
-        // Resize with chosen filter
         let scaled_img = imageops::resize(&img, new_width, new_height, filter);
 
         Ok(CaptureResult {
@@ -1081,7 +1042,6 @@ impl WaylandCapture {
                         )
                     )?
             };
-            // Access shm after event dispatch to avoid borrowing conflicts
             let shm = self.globals.shm
                 .as_ref()
                 .ok_or(Error::UnsupportedProtocol("wl_shm not available".to_string()))?;
@@ -1155,10 +1115,10 @@ impl WaylandCapture {
             };
             let mut buffer_data = mmap.to_vec();
             if
-                let Some(format) = {
+                let Some(format) = ({
                     let state = frame_state.lock().unwrap();
                     state.format
-                }
+                })
             {
                 match format {
                     ShmFormat::Xrgb8888 => {
@@ -1192,13 +1152,11 @@ impl WaylandCapture {
         parameters: Vec<CaptureParameters>,
         default_scale: f64
     ) -> Result<MultiOutputCaptureResult> {
-        // For now, we'll scale each result after capture
         let result = self.capture_outputs(parameters)?;
         let mut scaled_results = std::collections::HashMap::new();
 
         for (output_name, capture_result) in result.outputs {
-            // Find the scale for this output from parameters
-            let scale = default_scale; // In a full implementation, we'd look up the scale from parameters
+            let scale = default_scale;
             let scaled_result = self.scale_image_data(capture_result, scale)?;
             scaled_results.insert(output_name, scaled_result);
         }
@@ -1235,12 +1193,10 @@ impl Dispatch<WlRegistry, ()> for WaylandCapture {
                     );
                 }
                 "zxdg_output_manager_v1" => {
-                    // When we have the xdg_output_manager, create xdg_output objects for each existing output
                     state.globals.xdg_output_manager = Some(
                         registry.bind::<ZxdgOutputManagerV1, _, _>(name, version, qh, ())
                     );
 
-                    // Create xdg_output for all existing outputs
                     for output in &state.globals.outputs {
                         let xdg_output = state.globals.xdg_output_manager
                             .as_ref()
@@ -1252,11 +1208,8 @@ impl Dispatch<WlRegistry, ()> for WaylandCapture {
                 }
                 "wl_output" => {
                     let output = registry.bind::<WlOutput, _, _>(name, version, qh, ());
-                    // Use output's protocol ID as the key (not registry name!)
                     let output_id = output.id().protocol_id();
 
-                    // Добавляем информацию о выходе с временными значениями
-                    // Реальные значения будут получены позже через события wl_output
                     state.globals.output_info.insert(output_id, OutputInfo {
                         name: format!("output-{}", name),
                         width: 0,
@@ -1272,13 +1225,10 @@ impl Dispatch<WlRegistry, ()> for WaylandCapture {
                         logical_scale_known: false,
                         description: None,
                     });
-                    // Get the index of the output we're about to add
                     let output_idx = state.globals.outputs.len();
                     state.globals.outputs.push(output.clone());
 
-                    // If xdg_output_manager is already available, create xdg_output now
                     if let Some(ref xdg_output_manager) = state.globals.xdg_output_manager {
-                        // Get the output from the vector to reference it
                         let output_to_use = &state.globals.outputs[output_idx];
                         let xdg_output = xdg_output_manager.get_xdg_output(output_to_use, qh, ());
                         let output_id = output_to_use.id().protocol_id();
@@ -1301,8 +1251,6 @@ impl Dispatch<WlOutput, ()> for WaylandCapture {
         _qh: &QueueHandle<Self>
     ) {
         use wayland_client::protocol::wl_output::{ Event };
-        // Находим соответствующий OutputInfo для этого выхода
-        // Мы используем ID объекта для сопоставления
         let output_id = output.id().protocol_id();
         match event {
             Event::Geometry {
@@ -1318,11 +1266,9 @@ impl Dispatch<WlOutput, ()> for WaylandCapture {
                 if let Some(info) = state.globals.output_info.get_mut(&output_id) {
                     info.x = x;
                     info.y = y;
-                    // Store the transform value
                     if let wayland_client::WEnum::Value(t) = transform {
                         info.transform = t;
                     }
-                    // Only update logical coordinates if we don't have xdg_output info
                     if !info.logical_scale_known {
                         info.logical_x = x;
                         info.logical_y = y;
@@ -1416,7 +1362,6 @@ impl Dispatch<ZwlrScreencopyFrameV1, Arc<Mutex<FrameState>>> for WaylandCapture 
                 state.buffer = Some(vec![0u8; (stride * height) as usize]);
             }
             Event::Flags { flags } => {
-                // Save flags for later processing (e.g., Y_INVERT)
                 let mut state = frame_state.lock().unwrap();
                 if let wayland_client::WEnum::Value(val) = flags {
                     state.flags = val.bits();
@@ -1433,7 +1378,7 @@ impl Dispatch<ZwlrScreencopyFrameV1, Arc<Mutex<FrameState>>> for WaylandCapture 
                 state.ready = true;
             }
             Event::LinuxDmabuf { format, width, height } => {
-                // Обработка LinuxDmabuf - альтернативный способ передачи данных
+                // TODO:Обработка LinuxDmabuf - альтернативный способ передачи данных
                 // Пока не поддерживаем, но логируем для отладки
                 log::debug!(
                     "Received LinuxDmabuf: format={}, width={}, height={}",
@@ -1463,11 +1408,8 @@ impl Dispatch<ZxdgOutputV1, ()> for WaylandCapture {
     ) {
         use wayland_protocols::xdg::xdg_output::zv1::client::zxdg_output_v1::Event;
 
-        // Find the corresponding WlOutput ID for this xdg_output
         let xdg_output_id = xdg_output.id().protocol_id();
 
-        // Look for the wl_output that corresponds to this xdg_output
-        // We can do this by finding the entry in the output_xdg_map
         let mut found_output_id = None;
         for (wl_output_id, mapped_xdg_output) in &state.globals.output_xdg_map {
             if mapped_xdg_output.id().protocol_id() == xdg_output_id {
@@ -1490,7 +1432,6 @@ impl Dispatch<ZxdgOutputV1, ()> for WaylandCapture {
                         info.logical_scale_known = true;
                     }
                     Event::Name { name } => {
-                        // Use the xdg name if it's more specific than wl_output name
                         if info.name.starts_with("output-") || info.name.is_empty() {
                             info.name = name.clone();
                         }
@@ -1499,7 +1440,6 @@ impl Dispatch<ZxdgOutputV1, ()> for WaylandCapture {
                         info.description = Some(description);
                     }
                     Event::Done => {
-                        // The xdg_output is done with sending information
                         info.logical_scale_known = true;
                     }
                     _ => {}
@@ -1539,10 +1479,7 @@ impl Dispatch<ZxdgOutputManagerV1, ()> for WaylandCapture {
         _data: &(),
         _conn: &Connection,
         _qh: &QueueHandle<Self>
-    ) {
-        // The ZxdgOutputManagerV1 doesn't send events that we need to handle
-        // So we just leave this empty
-    }
+    ) {}
 }
 
 #[derive(Debug, Clone)]

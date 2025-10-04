@@ -23,7 +23,7 @@
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let mut grim = Grim::new()?;
 //! let result = grim.capture_all()?;
-//! 
+//!
 //! // Generate timestamped filename (like grim-rs does by default)
 //! let filename = format!("{}_grim.png", Local::now().format("%Y%m%d_%Hh%Mm%Ss"));
 //! grim.save_png(&result.data, result.width, result.height, &filename)?;
@@ -72,6 +72,7 @@ pub struct Output {
 /// Parameters for capturing a specific output.
 ///
 /// Allows specifying different capture parameters for each output when
+///
 /// capturing multiple outputs simultaneously.
 #[derive(Debug, Clone)]
 pub struct CaptureParameters {
@@ -82,17 +83,21 @@ pub struct CaptureParameters {
     /// Optional region within the output to capture.
     ///
     /// If `None`, the entire output will be captured.
+    ///
     /// If `Some(region)`, only the specified region will be captured.
+    ///
     /// The region must be within the bounds of the output.
     pub region: Option<Box>,
     /// Whether to include the cursor in the capture.
     ///
     /// If `true`, the cursor will be included in the screenshot.
+    ///
     /// If `false`, the cursor will be excluded from the screenshot.
     pub overlay_cursor: bool,
     /// Scale factor for the output image.
     ///
     /// If `None`, uses the default scale (typically the highest output scale).
+    ///
     /// If `Some(scale)`, the output image will be scaled accordingly.
     pub scale: Option<f64>,
 }
@@ -473,7 +478,7 @@ impl Grim {
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
-    /// 
+    ///
     /// // Generate timestamped filename
     /// let filename = format!("{}_grim.png", Local::now().format("%Y%m%d_%Hh%Mm%Ss"));
     /// grim.save_png(&result.data, result.width, result.height, &filename)?;
@@ -517,7 +522,7 @@ impl Grim {
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
-    /// 
+    ///
     /// // Generate timestamped filename
     /// let filename = format!("{}_grim.png", Local::now().format("%Y%m%d_%Hh%Mm%Ss"));
     /// grim.save_png_with_compression(&result.data, result.width, result.height, &filename, 9)?;
@@ -547,7 +552,6 @@ impl Grim {
                 )
             )?;
 
-        // Create PNG encoder with compression settings
         let file = std::fs::File::create(&path).map_err(|e| Error::IoWithContext {
             operation: format!("creating output file '{}'", path.as_ref().display()),
             source: e,
@@ -555,7 +559,6 @@ impl Grim {
         let writer = BufWriter::new(file);
         let mut encoder = png::Encoder::new(writer, width, height);
 
-        // Set compression level (0-9)
         let compression_level = match compression {
             0 => png::Compression::Fast,
             1..=3 => png::Compression::Best,
@@ -565,7 +568,6 @@ impl Grim {
         };
         encoder.set_compression(compression_level);
 
-        // Set color type to RGBA to match the input data
         encoder.set_color(png::ColorType::Rgba);
         encoder.set_filter(png::FilterType::NoFilter);
 
@@ -580,7 +582,6 @@ impl Grim {
                 )
             )?;
 
-        // Write RGBA data directly
         writer
             .write_image_data(data)
             .map_err(|e|
@@ -634,7 +635,7 @@ impl Grim {
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
-    /// 
+    ///
     /// // Generate timestamped filename
     /// let filename = format!("{}_grim.jpg", Local::now().format("%Y%m%d_%Hh%Mm%Ss"));
     /// grim.save_jpeg(&result.data, result.width, result.height, &filename)?;
@@ -682,7 +683,7 @@ impl Grim {
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
-    /// 
+    ///
     /// // Generate timestamped filename
     /// let filename = format!("{}_grim.jpg", Local::now().format("%Y%m%d_%Hh%Mm%Ss"));
     /// grim.save_jpeg_with_quality(&result.data, result.width, result.height, &filename, 90)?;
@@ -712,10 +713,8 @@ impl Grim {
                 )
             )?;
 
-        // Convert RGBA to RGB for JPEG
         let rgb_img: ImageBuffer<Rgb<u8>, Vec<u8>> = rgba_img.convert();
 
-        // Create encoder with quality setting - the quality parameter is part of the constructor
         let mut output_file = std::fs::File::create(&path).map_err(|e| Error::IoWithContext {
             operation: format!("creating output file '{}'", path.as_ref().display()),
             source: e,
@@ -723,7 +722,6 @@ impl Grim {
         let mut _encoder = jpeg_encoder::Encoder::new(&mut output_file, quality);
         let rgb_data = rgb_img.as_raw();
 
-        // Encode expects u16 dimensions, so convert if needed
         _encoder
             .encode(rgb_data, width as u16, height as u16, jpeg_encoder::ColorType::Rgb)
             .map_err(|e|
@@ -887,15 +885,12 @@ impl Grim {
                 )
             )?;
 
-        // Convert RGBA to RGB for JPEG
         let rgb_img: ImageBuffer<Rgb<u8>, Vec<u8>> = rgba_img.convert();
 
-        // Encode to JPEG with quality
         let mut jpeg_data = Vec::new();
         let mut _encoder = jpeg_encoder::Encoder::new(&mut jpeg_data, quality);
         let rgb_data = rgb_img.as_raw();
 
-        // Encode expects u16 dimensions, so convert if needed
         _encoder
             .encode(rgb_data, width as u16, height as u16, jpeg_encoder::ColorType::Rgb)
             .map_err(|e|
@@ -989,7 +984,6 @@ impl Grim {
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
     pub fn to_png(&self, data: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
-        // Default compression level of 6
         self.to_png_with_compression(data, width, height, 6)
     }
 
@@ -1046,13 +1040,11 @@ impl Grim {
                 )
             )?;
 
-        // Create PNG encoder with compression settings
         let mut output = Vec::new();
         {
             let writer = Cursor::new(&mut output);
             let mut encoder = png::Encoder::new(writer, width, height);
 
-            // Set compression level (0-9)
             let compression_level = match compression {
                 0 => png::Compression::Fast,
                 1..=3 => png::Compression::Best,
@@ -1062,7 +1054,6 @@ impl Grim {
             };
             encoder.set_compression(compression_level);
 
-            // Set color type to RGBA to match the input data
             encoder.set_color(png::ColorType::Rgba);
             encoder.set_filter(png::FilterType::NoFilter);
 
@@ -1077,7 +1068,6 @@ impl Grim {
                     )
                 )?;
 
-            // Write RGBA data directly
             writer
                 .write_image_data(data)
                 .map_err(|e|
@@ -1129,7 +1119,7 @@ impl Grim {
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
-    /// 
+    ///
     /// // Generate timestamped filename
     /// let filename = format!("{}_grim.ppm", Local::now().format("%Y%m%d_%Hh%Mm%Ss"));
     /// grim.save_ppm(&result.data, result.width, result.height, &filename)?;
@@ -1182,11 +1172,9 @@ impl Grim {
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
     pub fn to_ppm(&self, data: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
-        // PPM header (P6 format - binary RGB)
         let header = format!("P6\n{} {}\n255\n", width, height);
         let mut ppm_data = header.into_bytes();
 
-        // RGBA to RGB for PPM
         for chunk in data.chunks_exact(4) {
             ppm_data.push(chunk[0]); // R
             ppm_data.push(chunk[1]); // G
@@ -1343,7 +1331,6 @@ impl Grim {
     /// ```
     #[cfg(feature = "jpeg")]
     pub fn write_jpeg_to_stdout(&self, data: &[u8], width: u32, height: u32) -> Result<()> {
-        // Default quality
         self.write_jpeg_to_stdout_with_quality(data, width, height, 80)
     }
 
@@ -1450,28 +1437,20 @@ mod tests {
 
     #[test]
     fn test_mock_capture() {
-        // This test would require an active Wayland session which isn't available in CI/test environment
-        // So we'll skip the actual capture functionality test and just make sure the API works
-        // If we're running with a Wayland compositor, this would succeed
         let result = std::panic::catch_unwind(|| {
             let mut grim = Grim::new().unwrap();
             grim.capture_all()
         });
 
-        // The test is successful if the function can be called without panicking
-        // The actual success/failure depends on whether there are outputs available
         match result {
             Ok(capture_result) => {
-                // If we successfully got results, verify the data structure is correct
                 if let Ok(capture) = capture_result {
                     assert_eq!(capture.data.len(), (capture.width * capture.height * 4) as usize);
                 } else {
-                    // It's OK if there are no outputs to capture
                     assert!(matches!(capture_result, Err(Error::NoOutputs)));
                 }
             }
             Err(_) => {
-                // If the test panicked it means there was a different error
                 panic!("Test panicked unexpectedly");
             }
         }
@@ -1481,7 +1460,6 @@ mod tests {
     #[cfg(feature = "png")]
     fn test_to_png() {
         let grim = Grim::new().unwrap();
-        // Create RGBA data for 4x4 image (64 bytes: 4*4*4)
         let test_data = vec![255u8; 64];
         let png_data = grim.to_png(&test_data, 4, 4).unwrap();
         assert!(!png_data.is_empty());
@@ -1508,21 +1486,16 @@ mod tests {
     #[test]
     fn test_ppm_format() {
         let grim = Grim::new().unwrap();
-        // 4 pixels with RGBA
         let test_data = vec![255u8; 16];
         let ppm_result = grim.to_ppm(&test_data, 2, 2);
         assert!(ppm_result.is_ok());
         let ppm_data = ppm_result.unwrap();
-        // PPM header
         assert!(ppm_data.starts_with(b"P6\n2 2\n255\n"));
-        // Should contain 4 RGB pixels (12 bytes after header)
         assert!(ppm_data.len() >= 12);
     }
 
     #[test]
     fn test_read_region_from_stdin() {
-        // This test reads from stdin, which would block in tests
-        // So we'll create a mock test for the parsing part
         let region_str = "10,20 300x400";
         let result: std::result::Result<Box, _> = region_str.parse();
         assert!(result.is_ok());
@@ -1537,13 +1510,9 @@ mod tests {
     fn test_scale_functionality() {
         let mut grim = Grim::new().unwrap();
         let test_capture = grim.capture_all_with_scale(1.0);
-        // This will fail if no outputs are available in the test environment
-        // which is expected, but if it doesn't fail with the right error,
-        // we know the method exists
         match test_capture {
-            Ok(_) => {} // Success means the method works
-            Err(Error::NoOutputs) => {} // Expected if no outputs
-            // Any other error is a problem
+            Ok(_) => {}
+            Err(Error::NoOutputs) => {}
             Err(e) => panic!("Unexpected error: {:?}", e),
         }
     }

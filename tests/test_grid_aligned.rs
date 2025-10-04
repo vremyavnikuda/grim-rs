@@ -62,7 +62,6 @@ fn test_grid_aligned_l_shape_layout() {
 
 #[test]
 fn test_non_grid_aligned_overlapping_monitors() {
-    // Overlapping monitors (NOT grid-aligned)
     let box1 = Box::new(0, 0, 1920, 1080);
     let box2 = Box::new(1800, 0, 1920, 1080); // 120px overlap
     
@@ -71,7 +70,6 @@ fn test_non_grid_aligned_overlapping_monitors() {
 
 #[test]
 fn test_grid_aligned_triple_monitor() {
-    // Three monitors in a row: [A][B][C]
     let box_a = Box::new(0, 0, 1920, 1080);
     let box_b = Box::new(1920, 0, 1920, 1080);
     let box_c = Box::new(3840, 0, 1920, 1080);
@@ -93,7 +91,6 @@ fn test_grid_aligned_different_sizes() {
 
 #[test]
 fn test_region_intersection_within_output() {
-    // Test that region within a single output works correctly
     let output = Box::new(0, 0, 1920, 1080);
     let region = Box::new(100, 100, 800, 600);
     
@@ -105,10 +102,9 @@ fn test_region_intersection_within_output() {
 
 #[test]
 fn test_region_spanning_multiple_outputs() {
-    // Region spanning across two monitors
     let output1 = Box::new(0, 0, 1920, 1080);
     let output2 = Box::new(1920, 0, 1920, 1080);
-    let region = Box::new(1800, 400, 240, 280); // Spans both monitors
+    let region = Box::new(1800, 400, 240, 280);
     
     assert!(output1.intersects(&region), "Region should intersect first monitor");
     assert!(output2.intersects(&region), "Region should intersect second monitor");
@@ -116,30 +112,23 @@ fn test_region_spanning_multiple_outputs() {
     let int1 = output1.intersection(&region).unwrap();
     let int2 = output2.intersection(&region).unwrap();
     
-    // First monitor contribution: x=1800 to x=1920 (120 pixels wide)
     assert_eq!(int1.x, 1800);
     assert_eq!(int1.width, 120);
     
-    // Second monitor contribution: x=1920 to x=2040 (120 pixels wide)
     assert_eq!(int2.x, 1920);
     assert_eq!(int2.width, 120);
     
-    // Combined width should equal region width
     assert_eq!(int1.width + int2.width, region.width);
 }
 
 #[test]
 fn test_pixel_alignment_check() {
-    // All our coordinates are i32, so they're automatically pixel-aligned
-    // This test verifies that integer coordinates work correctly
     let box1 = Box::new(0, 0, 1920, 1080);
     let box2 = Box::new(1920, 0, 1920, 1080);
     
-    // Verify boundaries are exact integers (no fractional pixels)
     assert_eq!(box1.x + box1.width, 1920);
     assert_eq!(box2.x, 1920);
     
-    // No gap or overlap at boundary
     assert!(!box1.intersects(&box2));
 }
 
