@@ -9,9 +9,11 @@ Rust implementation of `grim-rs` screenshot utility for Wayland compositors.
 - **Native Wayland protocol support** via `wayland-client`
 - **Multi-monitor support** with automatic compositing across monitor boundaries
 - **Output transforms** - full support for rotated/flipped displays (all 8 Wayland transform types)
-- **High-quality image scaling** - adaptive algorithm selection:
-  - Bilinear (Triangle filter) for scale ≥ 0.75
-  - Lanczos3 for scale < 0.75 (superior quality for downscaling)
+- **High-quality image scaling** - 4-tier adaptive algorithm selection:
+  - Upscaling (>1.0): Triangle filter for smooth interpolation
+  - Mild downscaling (0.75-1.0): Triangle for fast, high-quality results
+  - Moderate downscaling (0.5-0.75): CatmullRom for sharp results with good performance
+  - Heavy downscaling (<0.5): Lanczos3 for best quality at extreme reduction
 - **Region-based screenshot capture** with pixel-perfect accuracy
 - **Multiple output formats**:
   - PNG with configurable compression (0-9)
@@ -74,6 +76,9 @@ fn main() -> grim_rs::Result<()> {
         println!("  Position: ({}, {})", output.geometry.x, output.geometry.y);
         println!("  Size: {}x{}", output.geometry.width, output.geometry.height);
         println!("  Scale: {}", output.scale);
+        if let Some(desc) = &output.description {
+            println!("  Description: {}", desc);
+        }
     }
     
     Ok(())
@@ -89,12 +94,12 @@ fn main() -> grim_rs::Result<()> {
     let mut grim = Grim::new()?;
     
     // Capture entire screen with scaling (high-quality downscaling)
-    let data = grim.capture_all_with_scale(0.5)?; // 50% size, Lanczos3 filter
+    let data = grim.capture_all_with_scale(0.5)?; // 50% size, uses Lanczos3 filter
     grim.save_png(&data.data, data.width, data.height, "thumbnail.png")?;
     
     // Capture region with scaling
     let region = Box::new(0, 0, 1920, 1080);
-    let data = grim.capture_region_with_scale(region, 0.8)?; // 80% size, Bilinear
+    let data = grim.capture_region_with_scale(region, 0.8)?; // 80% size, uses Triangle filter
     grim.save_png(&data.data, data.width, data.height, "scaled.png")?;
     
     // Capture specific output with scaling
@@ -396,6 +401,7 @@ Information about a display output:
 - `name: String` - Output name (e.g., "eDP-1", "HDMI-A-1")
 - `geometry: Box` - Output position and size
 - `scale: i32` - Scale factor (1 for normal DPI, 2 for HiDPI)
+- `description: Option<String>` - Monitor model and manufacturer information
 
 #### `Box`
 Rectangular region:
@@ -437,8 +443,9 @@ cargo doc --open
 | Output transforms | ✅ | ✅ |
 | Y-invert handling | ✅ | ✅ |
 | Multi-monitor compositing | ✅ | ✅ |
-| Image scaling | Nearest-neighbor | Bilinear + Lanczos3 |
+| Image scaling | Nearest-neighbor | 4-tier adaptive (Triangle/CatmullRom/Lanczos3) |
 | XDG Pictures support | ✅ | ✅ |
+| Output descriptions | ✅ | ✅ |
 | Color accuracy | ✅ | ✅ |
 | Real capture | ✅ | ✅ |
 
@@ -477,15 +484,26 @@ Wayland Screencopy → Buffer → Output Transform → Y-invert → Scaling → 
 
 ### Scaling Quality
 
-Adaptive algorithm selection ensures optimal quality:
+Adaptive 4-tier algorithm selection ensures optimal quality/performance balance:
 
-- **Scale ≥ 0.75**: Triangle filter (Bilinear interpolation)
-  - Fast, high-quality for small size changes
-  - Perfect for 1920×1080 → 1536×864 (0.8×)
+- **Upscaling (scale > 1.0)**: Triangle filter
+  - Smooth interpolation for enlarging images
+  - Avoids pixelation when scaling up
+  - Example: 1920×1080 → 2560×1440 (1.33×)
+
+- **Mild downscaling (0.75 ≤ scale ≤ 1.0)**: Triangle filter
+  - Fast, high-quality for small size reductions
+  - Perfect for minor adjustments: 1920×1080 → 1536×864 (0.8×)
   
-- **Scale < 0.75**: Lanczos3 convolution
-  - Superior quality for significant downscaling
+- **Moderate downscaling (0.5 ≤ scale < 0.75)**: CatmullRom filter
+  - Sharper results than Triangle
+  - Better performance than Lanczos3
+  - Ideal for medium reduction: 1920×1080 → 1280×720 (0.67×)
+
+- **Heavy downscaling (scale < 0.5)**: Lanczos3 convolution
+  - Best quality for significant reduction
   - Ideal for thumbnails: 3840×2160 → 960×540 (0.25×)
+  - Superior detail preservation at extreme scales
 
 ## Environment Variables
 
