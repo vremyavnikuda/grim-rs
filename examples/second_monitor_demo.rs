@@ -1,9 +1,14 @@
-use grim_rs::{ Box, Grim, Result };
 use chrono::Local;
+use grim_rs::{Box, Grim, Result};
 
 fn generate_filename(description: &str, extension: &str) -> String {
     let now = Local::now();
-    format!("{}_second_monitor_{}.{}", now.format("%Y%m%d_%Hh%Mm%Ss"), description, extension)
+    format!(
+        "{}_second_monitor_{}.{}",
+        now.format("%Y%m%d_%Hh%Mm%Ss"),
+        description,
+        extension
+    )
 }
 
 fn main() -> Result<()> {
@@ -22,8 +27,16 @@ fn main() -> Result<()> {
 
     for (i, output) in outputs.iter().enumerate() {
         println!("Output #{}: {}", i + 1, output.name);
-        println!("Position: ({}, {})", output.geometry.x, output.geometry.y);
-        println!("Size: {}x{}", output.geometry.width, output.geometry.height);
+        println!(
+            "Position: ({}, {})",
+            output.geometry.x(),
+            output.geometry.y()
+        );
+        println!(
+            "Size: {}x{}",
+            output.geometry.width(),
+            output.geometry.height()
+        );
         println!("Scale: {}x", output.scale);
         if let Some(ref desc) = output.description {
             println!("Description: {}", desc);
@@ -39,7 +52,11 @@ fn main() -> Result<()> {
 
     let second_output = &outputs[1];
     println!("Using second monitor: {}", second_output.name);
-    println!("Resolution: {}x{}\n", second_output.geometry.width, second_output.geometry.height);
+    println!(
+        "Resolution: {}x{}\n",
+        second_output.geometry.width(),
+        second_output.geometry.height()
+    );
 
     println!("Capturing full second monitor...");
     let result = grim.capture_output(&second_output.name)?;
@@ -52,16 +69,32 @@ fn main() -> Result<()> {
 
     println!("- At 0.5x scale...");
     let result_half = grim.capture_output_with_scale(&second_output.name, 0.5)?;
-    println!("Captured: {}x{} pixels", result_half.width, result_half.height);
+    println!(
+        "Captured: {}x{} pixels",
+        result_half.width, result_half.height
+    );
     let filename = generate_filename("half_scale", "png");
-    grim.save_png(&result_half.data, result_half.width, result_half.height, &filename)?;
+    grim.save_png(
+        &result_half.data,
+        result_half.width,
+        result_half.height,
+        &filename,
+    )?;
     println!("Saved: {}\n", filename);
 
     println!("- At 0.25x scale...");
     let result_quarter = grim.capture_output_with_scale(&second_output.name, 0.25)?;
-    println!("Captured: {}x{} pixels", result_quarter.width, result_quarter.height);
+    println!(
+        "Captured: {}x{} pixels",
+        result_quarter.width, result_quarter.height
+    );
     let filename = generate_filename("quarter_scale", "png");
-    grim.save_png(&result_quarter.data, result_quarter.width, result_quarter.height, &filename)?;
+    grim.save_png(
+        &result_quarter.data,
+        result_quarter.width,
+        result_quarter.height,
+        &filename,
+    )?;
     println!("Saved: {}\n", filename);
 
     println!("Capturing regions of second monitor...");
@@ -69,7 +102,12 @@ fn main() -> Result<()> {
     let geom = &second_output.geometry;
 
     println!("- Top-left corner (400x300)...");
-    let region = Box::new(geom.x, geom.y, (400).min(geom.width), (300).min(geom.height));
+    let region = Box::new(
+        geom.x(),
+        geom.y(),
+        (400).min(geom.width()),
+        (300).min(geom.height()),
+    );
     let result = grim.capture_region(region)?;
     println!("Captured: {}x{} pixels", result.width, result.height);
     let filename = generate_filename("top_left", "png");
@@ -77,13 +115,13 @@ fn main() -> Result<()> {
     println!("Saved: {}\n", filename);
 
     println!("- Center region (800x600)...");
-    let center_width = (800).min(geom.width);
-    let center_height = (600).min(geom.height);
+    let center_width = (800).min(geom.width());
+    let center_height = (600).min(geom.height());
     let region = Box::new(
-        geom.x + (geom.width - center_width) / 2,
-        geom.y + (geom.height - center_height) / 2,
+        geom.x() + (geom.width() - center_width) / 2,
+        geom.y() + (geom.height() - center_height) / 2,
         center_width,
-        center_height
+        center_height,
     );
     let result = grim.capture_region(region)?;
     println!("Captured: {}x{} pixels", result.width, result.height);
@@ -92,13 +130,13 @@ fn main() -> Result<()> {
     println!("Saved: {}\n", filename);
 
     println!("- Bottom-right corner (400x300)...");
-    let corner_width = (400).min(geom.width);
-    let corner_height = (300).min(geom.height);
+    let corner_width = (400).min(geom.width());
+    let corner_height = (300).min(geom.height());
     let region = Box::new(
-        geom.x + geom.width - corner_width,
-        geom.y + geom.height - corner_height,
+        geom.x() + geom.width() - corner_width,
+        geom.y() + geom.height() - corner_height,
         corner_width,
-        corner_height
+        corner_height,
     );
     let result = grim.capture_region(region)?;
     println!("Captured: {}x{} pixels", result.width, result.height);
@@ -140,13 +178,13 @@ fn main() -> Result<()> {
     println!("Capturing scaled regions...");
 
     println!("- Center region at 0.75x scale...");
-    let center_width = (800).min(geom.width);
-    let center_height = (600).min(geom.height);
+    let center_width = (800).min(geom.width());
+    let center_height = (600).min(geom.height());
     let region = Box::new(
-        geom.x + (geom.width - center_width) / 2,
-        geom.y + (geom.height - center_height) / 2,
+        geom.x() + (geom.width() - center_width) / 2,
+        geom.y() + (geom.height() - center_height) / 2,
         center_width,
-        center_height
+        center_height,
     );
     let result = grim.capture_region_with_scale(region, 0.75)?;
     println!("Captured: {}x{} pixels", result.width, result.height);
@@ -154,12 +192,12 @@ fn main() -> Result<()> {
     grim.save_png(&result.data, result.width, result.height, &filename)?;
     println!("Saved: {}\n", filename);
     println!("Capturing horizontal strip from second monitor...");
-    let strip_height = (200).min(geom.height);
+    let strip_height = (200).min(geom.height());
     let region = Box::new(
-        geom.x,
-        geom.y + (geom.height - strip_height) / 2,
-        geom.width,
-        strip_height
+        geom.x(),
+        geom.y() + (geom.height() - strip_height) / 2,
+        geom.width(),
+        strip_height,
     );
     let result = grim.capture_region(region)?;
     println!("Captured: {}x{} pixels", result.width, result.height);
@@ -167,12 +205,12 @@ fn main() -> Result<()> {
     grim.save_png(&result.data, result.width, result.height, &filename)?;
     println!("Saved: {}\n", filename);
     println!("Capturing vertical strip from second monitor...");
-    let strip_width = (200).min(geom.width);
+    let strip_width = (200).min(geom.width());
     let region = Box::new(
-        geom.x + (geom.width - strip_width) / 2,
-        geom.y,
+        geom.x() + (geom.width() - strip_width) / 2,
+        geom.y(),
         strip_width,
-        geom.height
+        geom.height(),
     );
     let result = grim.capture_region(region)?;
     println!("Captured: {}x{} pixels", result.width, result.height);
@@ -196,23 +234,31 @@ fn main() -> Result<()> {
 
     println!("Creating grid of small captures (4x4)...");
     let grid_size = 4;
-    let cell_width = geom.width / grid_size;
-    let cell_height = geom.height / grid_size;
+    let cell_width = geom.width() / grid_size;
+    let cell_height = geom.height() / grid_size;
 
     for row in 0..grid_size {
         for col in 0..grid_size {
             let region = Box::new(
-                geom.x + col * cell_width,
-                geom.y + row * cell_height,
+                geom.x() + col * cell_width,
+                geom.y() + row * cell_height,
                 cell_width,
-                cell_height
+                cell_height,
             );
             let result = grim.capture_region(region)?;
             let filename = generate_filename(&format!("grid_{}_{}", row, col), "png");
             grim.save_png(&result.data, result.width, result.height, &filename)?;
         }
     }
-    println!("Created {}x{} grid ({} images)\n", grid_size, grid_size, grid_size * grid_size);
-    println!("All screenshots saved to: {}", std::env::current_dir()?.display());
+    println!(
+        "Created {}x{} grid ({} images)\n",
+        grid_size,
+        grid_size,
+        grid_size * grid_size
+    );
+    println!(
+        "All screenshots saved to: {}",
+        std::env::current_dir()?.display()
+    );
     Ok(())
 }

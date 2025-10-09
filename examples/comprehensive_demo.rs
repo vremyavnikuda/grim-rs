@@ -1,3 +1,4 @@
+use chrono::Local;
 /// Comprehensive demonstration of all grim-rs screenshot capabilities.
 ///
 /// This example demonstrates every available method in the grim-rs API,
@@ -7,17 +8,19 @@
 ///     cargo run --example comprehensive_demo
 ///
 /// All screenshots will be saved to the project root directory.
-
-use grim_rs::{ Box, CaptureParameters, Grim, Result };
+use grim_rs::{Box, CaptureParameters, Grim, Result};
 use std::fs::File;
 use std::io::Write;
-use chrono::Local;
 
 /// Generate filename with timestamp (like grim-rs does by default)
 /// Format: YYYYMMDD_HHhMMmSSs_grim_demo.ext
 fn generate_demo_filename(extension: &str) -> String {
     let now = Local::now();
-    format!("{}_grim_rs_demo.{}", now.format("%Y%m%d_%Hh%Mm%Ss"), extension)
+    format!(
+        "{}_grim_rs_demo.{}",
+        now.format("%Y%m%d_%Hh%Mm%Ss"),
+        extension
+    )
 }
 
 fn main() -> Result<()> {
@@ -30,8 +33,16 @@ fn main() -> Result<()> {
 
     for (i, output) in outputs.iter().enumerate() {
         println!("Output #{}: {}", i + 1, output.name);
-        println!("  Position: ({}, {})", output.geometry.x, output.geometry.y);
-        println!("  Size: {}x{}", output.geometry.width, output.geometry.height);
+        println!(
+            "  Position: ({}, {})",
+            output.geometry.x(),
+            output.geometry.y()
+        );
+        println!(
+            "  Size: {}x{}",
+            output.geometry.width(),
+            output.geometry.height()
+        );
         println!("  Scale: {}x", output.scale);
         println!();
     }
@@ -42,7 +53,12 @@ fn main() -> Result<()> {
     }
 
     let result = grim.capture_all()?;
-    println!("Captured: {}x{} pixels ({} bytes)", result.width, result.height, result.data.len());
+    println!(
+        "Captured: {}x{} pixels ({} bytes)",
+        result.width,
+        result.height,
+        result.data.len()
+    );
 
     let filename = generate_demo_filename("png");
     grim.save_png(&result.data, result.width, result.height, &filename)?;
@@ -50,18 +66,25 @@ fn main() -> Result<()> {
 
     // Capture at 50% scale
     let result_scaled = grim.capture_all_with_scale(0.5)?;
-    println!("Captured at 0.5x scale: {}x{} pixels", result_scaled.width, result_scaled.height);
+    println!(
+        "Captured at 0.5x scale: {}x{} pixels",
+        result_scaled.width, result_scaled.height
+    );
 
     let filename = generate_demo_filename("png");
-    grim.save_png(&result_scaled.data, result_scaled.width, result_scaled.height, &filename)?;
+    grim.save_png(
+        &result_scaled.data,
+        result_scaled.width,
+        result_scaled.height,
+        &filename,
+    )?;
     println!("Saved: {}", filename);
 
     // Capture at 25% scale
     let result_scaled_25 = grim.capture_all_with_scale(0.25)?;
     println!(
         "Captured at 0.25x scale: {}x{} pixels",
-        result_scaled_25.width,
-        result_scaled_25.height
+        result_scaled_25.width, result_scaled_25.height
     );
 
     let filename = generate_demo_filename("png");
@@ -69,7 +92,7 @@ fn main() -> Result<()> {
         &result_scaled_25.data,
         result_scaled_25.width,
         result_scaled_25.height,
-        &filename
+        &filename,
     )?;
     println!("Saved: {}\n", filename);
 
@@ -77,21 +100,33 @@ fn main() -> Result<()> {
     println!("Capturing output: {}", first_output_name);
 
     let output_result = grim.capture_output(first_output_name)?;
-    println!("Captured output: {}x{} pixels", output_result.width, output_result.height);
+    println!(
+        "Captured output: {}x{} pixels",
+        output_result.width, output_result.height
+    );
 
     let filename = generate_demo_filename("png");
-    grim.save_png(&output_result.data, output_result.width, output_result.height, &filename)?;
+    grim.save_png(
+        &output_result.data,
+        output_result.width,
+        output_result.height,
+        &filename,
+    )?;
     println!("Saved: {}\n", filename);
 
     let output_scaled = grim.capture_output_with_scale(first_output_name, 0.5)?;
     println!(
         "Captured output at 0.5x scale: {}x{} pixels",
-        output_scaled.width,
-        output_scaled.height
+        output_scaled.width, output_scaled.height
     );
 
     let filename = generate_demo_filename("png");
-    grim.save_png(&output_scaled.data, output_scaled.width, output_scaled.height, &filename)?;
+    grim.save_png(
+        &output_scaled.data,
+        output_scaled.width,
+        output_scaled.height,
+        &filename,
+    )?;
     println!("Saved: {}\n", filename);
 
     // Capture 800x600 region starting at (100, 100)
@@ -99,21 +134,33 @@ fn main() -> Result<()> {
     println!("Region: {}", region);
 
     let region_result = grim.capture_region(region)?;
-    println!("Captured region: {}x{} pixels", region_result.width, region_result.height);
+    println!(
+        "Captured region: {}x{} pixels",
+        region_result.width, region_result.height
+    );
 
     let filename = generate_demo_filename("png");
-    grim.save_png(&region_result.data, region_result.width, region_result.height, &filename)?;
+    grim.save_png(
+        &region_result.data,
+        region_result.width,
+        region_result.height,
+        &filename,
+    )?;
     println!("Saved: {}\n", filename);
 
     let region_scaled = grim.capture_region_with_scale(region, 0.75)?;
     println!(
         "Captured region at 0.75x scale: {}x{} pixels",
-        region_scaled.width,
-        region_scaled.height
+        region_scaled.width, region_scaled.height
     );
 
     let filename = generate_demo_filename("png");
-    grim.save_png(&region_scaled.data, region_scaled.width, region_scaled.height, &filename)?;
+    grim.save_png(
+        &region_scaled.data,
+        region_scaled.width,
+        region_scaled.height,
+        &filename,
+    )?;
     println!("Saved: {}\n", filename);
 
     if outputs.len() >= 2 {
@@ -131,7 +178,7 @@ fn main() -> Result<()> {
                 region: None,
                 overlay_cursor: false,
                 scale: Some(0.5),
-            }
+            },
         ];
 
         let multi_result = grim.capture_outputs(params)?;
@@ -153,7 +200,12 @@ fn main() -> Result<()> {
 
     // PNG with default compression
     let filename_png = generate_demo_filename("png");
-    grim.save_png(&format_result.data, format_result.width, format_result.height, &filename_png)?;
+    grim.save_png(
+        &format_result.data,
+        format_result.width,
+        format_result.height,
+        &filename_png,
+    )?;
     println!("Saved PNG (default compression): {}", filename_png);
 
     // PNG with high compression (compression level 0-9)
@@ -163,13 +215,18 @@ fn main() -> Result<()> {
         format_result.width,
         format_result.height,
         &filename_png_compressed,
-        9
+        9,
     )?;
     println!("Saved PNG (best compression): {}", filename_png_compressed);
 
     // PPM format (uncompressed)
     let filename_ppm = generate_demo_filename("ppm");
-    grim.save_ppm(&format_result.data, format_result.width, format_result.height, &filename_ppm)?;
+    grim.save_ppm(
+        &format_result.data,
+        format_result.width,
+        format_result.height,
+        &filename_ppm,
+    )?;
     println!("Saved PPM (uncompressed): {}", filename_ppm);
 
     // JPEG format (if feature enabled)
@@ -180,7 +237,7 @@ fn main() -> Result<()> {
             &format_result.data,
             format_result.width,
             format_result.height,
-            &filename_jpeg
+            &filename_jpeg,
         )?;
         println!("Saved JPEG (default quality): {}", filename_jpeg);
 
@@ -190,7 +247,7 @@ fn main() -> Result<()> {
             format_result.width,
             format_result.height,
             &filename_jpeg_hq,
-            95
+            95,
         )?;
         println!("Saved JPEG (quality 95): {}", filename_jpeg_hq);
     }
@@ -214,14 +271,15 @@ fn main() -> Result<()> {
     #[cfg(feature = "jpeg")]
     {
         // Convert to JPEG bytes
-        let jpeg_bytes = grim.to_jpeg(&small_result.data, small_result.width, small_result.height)?;
+        let jpeg_bytes =
+            grim.to_jpeg(&small_result.data, small_result.width, small_result.height)?;
         println!("JPEG bytes: {} bytes", jpeg_bytes.len());
 
         let jpeg_hq_bytes = grim.to_jpeg_with_quality(
             &small_result.data,
             small_result.width,
             small_result.height,
-            90
+            90,
         )?;
         println!("JPEG bytes (quality 90): {} bytes", jpeg_hq_bytes.len());
     }
@@ -237,17 +295,25 @@ fn main() -> Result<()> {
         let output1 = &outputs[0].geometry;
 
         // Region from end of first output to start of second
-        let span_x = output1.x + output1.width - 200;
+        let span_x = output1.x() + output1.width() - 200;
         let span_width = 400;
-        let span_region = Box::new(span_x, output1.y, span_width, 400);
+        let span_region = Box::new(span_x, output1.y(), span_width, 400);
 
         println!("Spanning region: {}", span_region);
 
         let span_result = grim.capture_region(span_region)?;
-        println!("Captured spanning region: {}x{} pixels", span_result.width, span_result.height);
+        println!(
+            "Captured spanning region: {}x{} pixels",
+            span_result.width, span_result.height
+        );
 
         let filename = generate_demo_filename("png");
-        grim.save_png(&span_result.data, span_result.width, span_result.height, &filename)?;
+        grim.save_png(
+            &span_result.data,
+            span_result.width,
+            span_result.height,
+            &filename,
+        )?;
         println!("Saved: {}\n", filename);
     } else {
         println!("Skipping spanning region (only 1 output available)\n");
@@ -260,8 +326,18 @@ fn main() -> Result<()> {
     let filename_png = generate_demo_filename("png");
     let filename_ppm = generate_demo_filename("ppm");
 
-    grim.save_png(&test_result.data, test_result.width, test_result.height, &filename_png)?;
-    grim.save_ppm(&test_result.data, test_result.width, test_result.height, &filename_ppm)?;
+    grim.save_png(
+        &test_result.data,
+        test_result.width,
+        test_result.height,
+        &filename_png,
+    )?;
+    grim.save_ppm(
+        &test_result.data,
+        test_result.width,
+        test_result.height,
+        &filename_ppm,
+    )?;
 
     let png_size = std::fs::metadata(&filename_png)?.len();
     let ppm_size = std::fs::metadata(&filename_ppm)?.len();
@@ -273,7 +349,12 @@ fn main() -> Result<()> {
     #[cfg(feature = "jpeg")]
     {
         let filename_jpg = generate_demo_filename("jpg");
-        grim.save_jpeg(&test_result.data, test_result.width, test_result.height, &filename_jpg)?;
+        grim.save_jpeg(
+            &test_result.data,
+            test_result.width,
+            test_result.height,
+            &filename_jpg,
+        )?;
         let jpeg_size = std::fs::metadata(&filename_jpg)?.len();
         println!("  JPEG ({}): {} bytes", filename_jpg, jpeg_size);
     }
@@ -286,11 +367,10 @@ fn main() -> Result<()> {
         println!("  • Spanning region captures");
     }
 
-    println!("  • Multiple formats: PNG, PPM{}", if cfg!(feature = "jpeg") {
-        ", JPEG"
-    } else {
-        ""
-    });
+    println!(
+        "  • Multiple formats: PNG, PPM{}",
+        if cfg!(feature = "jpeg") { ", JPEG" } else { "" }
+    );
 
     Ok(())
 }

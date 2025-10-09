@@ -1,50 +1,40 @@
 use crate::{
-    CaptureResult,
-    Output,
-    Box,
-    Result,
-    Error,
-    CaptureParameters,
-    MultiOutputCaptureResult,
+    Box, CaptureParameters, CaptureResult, Error, MultiOutputCaptureResult, Output, Result,
 };
 use wayland_client::{
-    Connection,
-    Dispatch,
-    QueueHandle,
-    Proxy,
     protocol::{
+        wl_buffer::WlBuffer,
         wl_compositor::WlCompositor,
         wl_output::WlOutput,
-        wl_shm::{ WlShm, Format as ShmFormat },
-        wl_shm_pool::WlShmPool,
-        wl_buffer::WlBuffer,
         wl_registry::WlRegistry,
+        wl_shm::{Format as ShmFormat, WlShm},
+        wl_shm_pool::WlShmPool,
     },
+    Connection, Dispatch, Proxy, QueueHandle,
 };
 use wayland_protocols_wlr::screencopy::v1::client::{
-    zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1,
     zwlr_screencopy_frame_v1::ZwlrScreencopyFrameV1,
+    zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1,
 };
 
 // Screencopy frame flags from the protocol
 const ZWLR_SCREENCOPY_FRAME_V1_FLAGS_Y_INVERT: u32 = 1;
-use wayland_protocols::xdg::xdg_output::zv1::client::{
-    zxdg_output_manager_v1::ZxdgOutputManagerV1,
-    zxdg_output_v1::ZxdgOutputV1,
-};
 use std::collections::HashMap;
-use std::sync::{ Arc, Mutex };
-use std::os::fd::{ AsRawFd, BorrowedFd };
+use std::os::fd::{AsRawFd, BorrowedFd};
+use std::sync::{Arc, Mutex};
+use wayland_protocols::xdg::xdg_output::zv1::client::{
+    zxdg_output_manager_v1::ZxdgOutputManagerV1, zxdg_output_v1::ZxdgOutputV1,
+};
 
 const MAX_ATTEMPTS: usize = 100;
 
 /// Apply output transformation to width and height.
-/// 
+///
 /// For 90° and 270° rotations, width and height are swapped.
 fn apply_output_transform(
     transform: wayland_client::protocol::wl_output::Transform,
     width: &mut i32,
-    height: &mut i32
+    height: &mut i32,
 ) {
     use wayland_client::protocol::wl_output::Transform;
 
@@ -69,26 +59,28 @@ fn get_output_rotation(transform: wayland_client::protocol::wl_output::Transform
 }
 
 /// Get flip multiplier for the given transform.
-/// 
+///
 /// Returns -1 if flipped, 1 otherwise.
 fn get_output_flipped(transform: wayland_client::protocol::wl_output::Transform) -> i32 {
     use wayland_client::protocol::wl_output::Transform;
 
     match transform {
-        Transform::Flipped | Transform::Flipped90 | Transform::Flipped180 | Transform::Flipped270 =>
-            -1,
+        Transform::Flipped
+        | Transform::Flipped90
+        | Transform::Flipped180
+        | Transform::Flipped270 => -1,
         _ => 1,
     }
 }
 
 /// Apply transform to captured image data based on rotation and flip.
-/// 
+///
 /// This handles basic 90/180/270 degree rotations and horizontal flips.
 fn apply_image_transform(
     data: &[u8],
     width: u32,
     height: u32,
-    transform: wayland_client::protocol::wl_output::Transform
+    transform: wayland_client::protocol::wl_output::Transform,
 ) -> (Vec<u8>, u32, u32) {
     use wayland_client::protocol::wl_output::Transform;
 
@@ -235,7 +227,11 @@ fn guess_output_logical_geometry(info: &mut OutputInfo) {
     info.logical_width = info.width / info.scale;
     info.logical_height = info.height / info.scale;
 
-    apply_output_transform(info.transform, &mut info.logical_width, &mut info.logical_height);
+    apply_output_transform(
+        info.transform,
+        &mut info.logical_width,
+        &mut info.logical_height,
+    );
     info.logical_scale_known = true;
 }
 
@@ -245,7 +241,7 @@ fn blit_capture(
     dest_height: usize,
     capture: &CaptureResult,
     offset_x: usize,
-    offset_y: usize
+    offset_y: usize,
 ) {
     let src_width = capture.width as usize;
     let src_height = capture.height as usize;
@@ -269,14 +265,13 @@ fn blit_capture(
     for row in 0..copy_height {
         let dest_index = (offset_y + row) * dest_stride + offset_x * 4;
         let src_index = row * src_stride;
-        dest[dest_index..dest_index + row_bytes].copy_from_slice(
-            &capture.data[src_index..src_index + row_bytes]
-        );
+        dest[dest_index..dest_index + row_bytes]
+            .copy_from_slice(&capture.data[src_index..src_index + row_bytes]);
     }
 }
 
 /// Check if outputs have overlapping regions.
-/// 
+///
 /// Returns true if any two outputs overlap.
 fn check_outputs_overlap(outputs: &[(WlOutput, OutputInfo)]) -> bool {
     for i in 0..outputs.len() {
@@ -284,7 +279,7 @@ fn check_outputs_overlap(outputs: &[(WlOutput, OutputInfo)]) -> bool {
             outputs[i].1.logical_x,
             outputs[i].1.logical_y,
             outputs[i].1.logical_width,
-            outputs[i].1.logical_height
+            outputs[i].1.logical_height,
         );
 
         for j in i + 1..outputs.len() {
@@ -292,7 +287,7 @@ fn check_outputs_overlap(outputs: &[(WlOutput, OutputInfo)]) -> bool {
                 outputs[j].1.logical_x,
                 outputs[j].1.logical_y,
                 outputs[j].1.logical_width,
-                outputs[j].1.logical_height
+                outputs[j].1.logical_height,
             );
 
             if box1.intersects(&box2) {
@@ -305,7 +300,7 @@ fn check_outputs_overlap(outputs: &[(WlOutput, OutputInfo)]) -> bool {
 }
 
 /// Check if the layout is grid-aligned (outputs are pixel-aligned and don't overlap).
-/// 
+///
 /// Grid-aligned layouts can use faster SRC compositing instead of OVER.
 fn is_grid_aligned(region: &Box, outputs: &[(WlOutput, OutputInfo)]) -> bool {
     if check_outputs_overlap(outputs) {
@@ -313,7 +308,12 @@ fn is_grid_aligned(region: &Box, outputs: &[(WlOutput, OutputInfo)]) -> bool {
     }
 
     for (_, info) in outputs {
-        let output_box = Box::new(info.logical_x, info.logical_y, info.logical_width, info.logical_height);
+        let output_box = Box::new(
+            info.logical_x,
+            info.logical_y,
+            info.logical_width,
+            info.logical_height,
+        );
         if output_box.intersects(region) {
             continue;
         }
@@ -356,9 +356,9 @@ pub struct WaylandCapture {
 
 impl WaylandCapture {
     pub fn new() -> Result<Self> {
-        let connection = Connection::connect_to_env().map_err(|e|
+        let connection = Connection::connect_to_env().map_err(|e| {
             Error::WaylandConnection(format!("Failed to connect to Wayland: {}", e))
-        )?;
+        })?;
         let globals = WaylandGlobals {
             compositor: None,
             shm: None,
@@ -375,18 +375,18 @@ impl WaylandCapture {
             _connection: connection,
             globals,
         };
-        event_queue
-            .roundtrip(&mut instance)
-            .map_err(|e| {
-                Error::WaylandConnection(format!("Failed to initialize Wayland globals: {}", e))
-            })?;
+        event_queue.roundtrip(&mut instance).map_err(|e| {
+            Error::WaylandConnection(format!("Failed to initialize Wayland globals: {}", e))
+        })?;
         if instance.globals.screencopy_manager.is_none() {
-            return Err(
-                Error::UnsupportedProtocol("zwlr_screencopy_manager_v1 not available".to_string())
-            );
+            return Err(Error::UnsupportedProtocol(
+                "zwlr_screencopy_manager_v1 not available".to_string(),
+            ));
         }
         if instance.globals.shm.is_none() {
-            return Err(Error::UnsupportedProtocol("wl_shm not available".to_string()));
+            return Err(Error::UnsupportedProtocol(
+                "wl_shm not available".to_string(),
+            ));
         }
         Ok(instance)
     }
@@ -402,21 +402,17 @@ impl WaylandCapture {
 
         let _registry = self._connection.display().get_registry(&qh, ());
 
-        event_queue
-            .roundtrip(self)
-            .map_err(|e| {
-                Error::WaylandConnection(format!("Failed to refresh Wayland globals: {}", e))
-            })?;
+        event_queue.roundtrip(self).map_err(|e| {
+            Error::WaylandConnection(format!("Failed to refresh Wayland globals: {}", e))
+        })?;
         if self.globals.output_info.is_empty() {
             return Err(Error::NoOutputs);
         }
 
         for _ in 0..2 {
-            event_queue
-                .roundtrip(self)
-                .map_err(|e| {
-                    Error::WaylandConnection(format!("Failed to process output events: {}", e))
-                })?;
+            event_queue.roundtrip(self).map_err(|e| {
+                Error::WaylandConnection(format!("Failed to process output events: {}", e))
+            })?;
         }
 
         // If xdg_output_manager is not available, guess logical geometry from physical
@@ -432,11 +428,13 @@ impl WaylandCapture {
     }
 
     fn collect_outputs_snapshot(&self) -> Vec<(WlOutput, OutputInfo)> {
-        self.globals.outputs
+        self.globals
+            .outputs
             .iter()
             .filter_map(|output| {
                 let id = output.id().protocol_id();
-                self.globals.output_info
+                self.globals
+                    .output_info
                     .get(&id)
                     .cloned()
                     .map(|info| (output.clone(), info))
@@ -448,51 +446,45 @@ impl WaylandCapture {
         &mut self,
         output: &WlOutput,
         region: Box,
-        overlay_cursor: bool
+        overlay_cursor: bool,
     ) -> Result<CaptureResult> {
-        if region.width <= 0 || region.height <= 0 {
-            return Err(
-                Error::InvalidRegion(
-                    "Capture region must have positive width and height".to_string()
-                )
-            );
+        if region.width() <= 0 || region.height() <= 0 {
+            return Err(Error::InvalidRegion(
+                "Capture region must have positive width and height".to_string(),
+            ));
         }
-        if region.x < 0 || region.y < 0 {
-            return Err(
-                Error::InvalidRegion("Capture region origin must be non-negative".to_string())
-            );
+        if region.x() < 0 || region.y() < 0 {
+            return Err(Error::InvalidRegion(
+                "Capture region origin must be non-negative".to_string(),
+            ));
         }
 
-        let screencopy_manager = self.globals.screencopy_manager
-            .as_ref()
-            .ok_or(
-                Error::UnsupportedProtocol("zwlr_screencopy_manager_v1 not available".to_string())
-            )?;
+        let screencopy_manager =
+            self.globals
+                .screencopy_manager
+                .as_ref()
+                .ok_or(Error::UnsupportedProtocol(
+                    "zwlr_screencopy_manager_v1 not available".to_string(),
+                ))?;
         let mut event_queue = self._connection.new_event_queue();
         let qh = event_queue.handle();
-        let frame_state = Arc::new(
-            Mutex::new(FrameState {
-                buffer: None,
-                width: 0,
-                height: 0,
-                format: None,
-                ready: false,
-                flags: 0,
-            })
-        );
+        let frame_state = Arc::new(Mutex::new(FrameState {
+            buffer: None,
+            width: 0,
+            height: 0,
+            format: None,
+            ready: false,
+            flags: 0,
+        }));
         let frame = screencopy_manager.capture_output_region(
-            if overlay_cursor {
-                1
-            } else {
-                0
-            },
+            if overlay_cursor { 1 } else { 0 },
             output,
-            region.x,
-            region.y,
-            region.width,
-            region.height,
+            region.x(),
+            region.y(),
+            region.width(),
+            region.height(),
             &qh,
-            frame_state.clone()
+            frame_state.clone(),
         );
 
         let mut attempts = 0;
@@ -501,27 +493,27 @@ impl WaylandCapture {
                 let state = frame_state.lock().unwrap();
                 if state.buffer.is_some() || state.ready {
                     if state.ready && state.buffer.is_none() {
-                        return Err(
-                            Error::FrameCapture(
-                                "Frame is ready but buffer was not received".to_string()
-                            )
-                        );
+                        return Err(Error::FrameCapture(
+                            "Frame is ready but buffer was not received".to_string(),
+                        ));
                     }
                     break;
                 }
             }
             if attempts >= MAX_ATTEMPTS {
-                return Err(Error::FrameCapture("Timeout waiting for frame buffer".to_string()));
+                return Err(Error::FrameCapture(
+                    "Timeout waiting for frame buffer".to_string(),
+                ));
             }
-            event_queue
-                .blocking_dispatch(self)
-                .map_err(|e| {
-                    Error::FrameCapture(format!("Failed to dispatch frame events: {}", e))
-                })?;
+            event_queue.blocking_dispatch(self).map_err(|e| {
+                Error::FrameCapture(format!("Failed to dispatch frame events: {}", e))
+            })?;
             attempts += 1;
         }
 
-        let shm = self.globals.shm
+        let shm = self
+            .globals
+            .shm
             .as_ref()
             .ok_or_else(|| Error::UnsupportedProtocol("wl_shm not available".to_string()))?;
 
@@ -538,28 +530,22 @@ impl WaylandCapture {
             (width, height, stride, size, format)
         };
 
-        let mut tmp_file = tempfile::NamedTempFile
-            ::new()
-            .map_err(|e| Error::BufferCreation(format!("failed to create temporary file: {}", e)))?;
-        tmp_file
-            .as_file_mut()
-            .set_len(size as u64)
-            .map_err(|e|
-                Error::BufferCreation(format!("failed to resize buffer to {} bytes: {}", size, e))
-            )?;
+        let mut tmp_file = tempfile::NamedTempFile::new().map_err(|e| {
+            Error::BufferCreation(format!("failed to create temporary file: {}", e))
+        })?;
+        tmp_file.as_file_mut().set_len(size as u64).map_err(|e| {
+            Error::BufferCreation(format!("failed to resize buffer to {} bytes: {}", size, e))
+        })?;
         let mmap = unsafe {
-            memmap2::MmapMut
-                ::map_mut(&tmp_file)
+            memmap2::MmapMut::map_mut(&tmp_file)
                 .map_err(|e| Error::BufferCreation(format!("failed to memory-map buffer: {}", e)))?
         };
 
         let pool = shm.create_pool(
-            unsafe {
-                BorrowedFd::borrow_raw(tmp_file.as_file().as_raw_fd())
-            },
+            unsafe { BorrowedFd::borrow_raw(tmp_file.as_file().as_raw_fd()) },
             size as i32,
             &qh,
-            ()
+            (),
         );
         let buffer = pool.create_buffer(
             0,
@@ -568,7 +554,7 @@ impl WaylandCapture {
             stride as i32,
             format,
             &qh,
-            ()
+            (),
         );
         frame.copy(&buffer);
 
@@ -578,25 +564,21 @@ impl WaylandCapture {
                 let state = frame_state.lock().unwrap();
                 if state.ready {
                     if state.buffer.is_none() {
-                        return Err(
-                            Error::FrameCapture(
-                                "Frame is ready but buffer was not received".to_string()
-                            )
-                        );
+                        return Err(Error::FrameCapture(
+                            "Frame is ready but buffer was not received".to_string(),
+                        ));
                     }
                     break;
                 }
             }
             if attempts >= MAX_ATTEMPTS {
-                return Err(
-                    Error::FrameCapture("Timeout waiting for frame capture completion".to_string())
-                );
+                return Err(Error::FrameCapture(
+                    "Timeout waiting for frame capture completion".to_string(),
+                ));
             }
-            event_queue
-                .blocking_dispatch(self)
-                .map_err(|e| {
-                    Error::FrameCapture(format!("Failed to dispatch frame events: {}", e))
-                })?;
+            event_queue.blocking_dispatch(self).map_err(|e| {
+                Error::FrameCapture(format!("Failed to dispatch frame events: {}", e))
+            })?;
             attempts += 1;
         }
 
@@ -623,13 +605,12 @@ impl WaylandCapture {
         let mut final_height = height;
 
         if let Some(info) = self.globals.output_info.get(&output_id) {
-            if !matches!(info.transform, wayland_client::protocol::wl_output::Transform::Normal) {
-                let (transformed_data, new_width, new_height) = apply_image_transform(
-                    &final_data,
-                    final_width,
-                    final_height,
-                    info.transform
-                );
+            if !matches!(
+                info.transform,
+                wayland_client::protocol::wl_output::Transform::Normal
+            ) {
+                let (transformed_data, new_width, new_height) =
+                    apply_image_transform(&final_data, final_width, final_height, info.transform);
                 final_data = transformed_data;
                 final_width = new_width;
                 final_height = new_height;
@@ -642,11 +623,8 @@ impl WaylandCapture {
         };
 
         if (flags & ZWLR_SCREENCOPY_FRAME_V1_FLAGS_Y_INVERT) != 0 {
-            let (inverted_data, inv_width, inv_height) = flip_vertical(
-                &final_data,
-                final_width,
-                final_height
-            );
+            let (inverted_data, inv_width, inv_height) =
+                flip_vertical(&final_data, final_width, final_height);
             final_data = inverted_data;
             final_width = inv_width;
             final_height = inv_height;
@@ -663,69 +641,77 @@ impl WaylandCapture {
         &mut self,
         region: Box,
         outputs: &[(WlOutput, OutputInfo)],
-        overlay_cursor: bool
+        overlay_cursor: bool,
     ) -> Result<CaptureResult> {
-        if region.width <= 0 || region.height <= 0 {
-            return Err(
-                Error::InvalidRegion(
-                    "Capture region must have positive width and height".to_string()
-                )
-            );
+        if region.width() <= 0 || region.height() <= 0 {
+            return Err(Error::InvalidRegion(
+                "Capture region must have positive width and height".to_string(),
+            ));
         }
 
-        let dest_width = region.width as usize;
-        let dest_height = region.height as usize;
+        let dest_width = region.width() as usize;
+        let dest_height = region.height() as usize;
         let mut dest = vec![0u8; dest_width * dest_height * 4];
         let mut any_capture = false;
 
         let _grid_aligned = is_grid_aligned(&region, outputs);
 
         for (output, info) in outputs {
-            let output_box = Box::new(info.logical_x, info.logical_y, info.logical_width, info.logical_height);
+            let output_box = Box::new(
+                info.logical_x,
+                info.logical_y,
+                info.logical_width,
+                info.logical_height,
+            );
             if let Some(intersection) = output_box.intersection(&region) {
-                if intersection.width <= 0 || intersection.height <= 0 {
+                if intersection.width() <= 0 || intersection.height() <= 0 {
                     continue;
                 }
 
                 let scale = info.scale as f64;
                 let physical_local_region = Box::new(
-                    ((intersection.x - info.logical_x) as f64 * scale) as i32,
-                    ((intersection.y - info.logical_y) as f64 * scale) as i32,
-                    (intersection.width as f64 * scale) as i32,
-                    (intersection.height as f64 * scale) as i32,
+                    (((intersection.x() - info.logical_x) as f64) * scale) as i32,
+                    (((intersection.y() - info.logical_y) as f64) * scale) as i32,
+                    ((intersection.width() as f64) * scale) as i32,
+                    ((intersection.height() as f64) * scale) as i32,
                 );
 
                 let output_handle = output.clone();
                 let mut capture = self.capture_region_for_output(
                     &output_handle,
                     physical_local_region,
-                    overlay_cursor
+                    overlay_cursor,
                 )?;
 
                 if scale != 1.0 {
                     capture = self.scale_image_data(capture, 1.0 / scale)?;
                 }
 
-                let offset_x = (intersection.x - region.x) as usize;
-                let offset_y = (intersection.y - region.y) as usize;
+                let offset_x = (intersection.x() - region.x()) as usize;
+                let offset_y = (intersection.y() - region.y()) as usize;
 
-                blit_capture(&mut dest, dest_width, dest_height, &capture, offset_x, offset_y);
+                blit_capture(
+                    &mut dest,
+                    dest_width,
+                    dest_height,
+                    &capture,
+                    offset_x,
+                    offset_y,
+                );
                 any_capture = true;
             }
         }
 
         if !any_capture {
-            return Err(
-                Error::InvalidRegion(
-                    "Capture region does not intersect with any output".to_string()
-                )
-            );
+            return Err(Error::InvalidRegion(
+                "Capture region does not intersect with any output".to_string(),
+            ));
         }
 
         Ok(CaptureResult {
             data: dest,
-            width: region.width as u32,
-            height: region.height as u32,
+            width: region.width() as u32,
+            height: region.height() as u32,
         })
     }
 
@@ -736,7 +722,12 @@ impl WaylandCapture {
             .into_iter()
             .map(|(_, info)| {
                 let (x, y, width, height) = if info.logical_scale_known {
-                    (info.logical_x, info.logical_y, info.logical_width, info.logical_height)
+                    (
+                        info.logical_x,
+                        info.logical_y,
+                        info.logical_width,
+                        info.logical_height,
+                    )
                 } else {
                     (info.x, info.y, info.width, info.height)
                 };
@@ -806,7 +797,7 @@ impl WaylandCapture {
         let original_result = self.composite_region(
             Box::new(min_x, min_y, max_x - min_x, max_y - min_y),
             &snapshot,
-            false
+            false,
         )?;
 
         self.scale_image_data(original_result, scale)
@@ -827,7 +818,7 @@ impl WaylandCapture {
     pub fn capture_output_with_scale(
         &mut self,
         output_name: &str,
-        scale: f64
+        scale: f64,
     ) -> Result<CaptureResult> {
         self.refresh_outputs()?;
         let snapshot = self.collect_outputs_snapshot();
@@ -863,24 +854,21 @@ impl WaylandCapture {
         let new_height = ((old_height as f64) * scale) as u32;
 
         if new_width == 0 || new_height == 0 {
-            return Err(Error::InvalidRegion("Scaled dimensions must be positive".to_string()));
+            return Err(Error::InvalidRegion(
+                "Scaled dimensions must be positive".to_string(),
+            ));
         }
 
-        use image::{ ImageBuffer, Rgba, imageops };
+        use image::{imageops, ImageBuffer, Rgba};
 
-        let img = ImageBuffer::<Rgba<u8>, Vec<u8>>
-            ::from_raw(old_width, old_height, capture_result.data)
-            .ok_or_else(||
-                Error::ScalingFailed(
-                    format!(
+        let img =
+            ImageBuffer::<Rgba<u8>, Vec<u8>>::from_raw(old_width, old_height, capture_result.data)
+                .ok_or_else(|| {
+                    Error::ScalingFailed(format!(
                         "failed to create image buffer for scaling {}x{} -> {}x{}",
-                        old_width,
-                        old_height,
-                        new_width,
-                        new_height
-                    )
-                )
-            )?;
+                        old_width, old_height, new_width, new_height
+                    ))
+                })?;
 
         let filter = if scale > 1.0 {
             imageops::FilterType::Triangle
@@ -903,20 +891,28 @@ impl WaylandCapture {
 
     pub fn capture_outputs(
         &mut self,
-        parameters: Vec<CaptureParameters>
+        parameters: Vec<CaptureParameters>,
     ) -> Result<MultiOutputCaptureResult> {
-        let output = self.globals.outputs.first().ok_or_else(|| Error::NoOutputs)?;
-        let screencopy_manager = self.globals.screencopy_manager
-            .as_ref()
-            .ok_or(
-                Error::UnsupportedProtocol("zwlr_screencopy_manager_v1 not available".to_string())
-            )?;
+        let output = self
+            .globals
+            .outputs
+            .first()
+            .ok_or_else(|| Error::NoOutputs)?;
+        let screencopy_manager =
+            self.globals
+                .screencopy_manager
+                .as_ref()
+                .ok_or(Error::UnsupportedProtocol(
+                    "zwlr_screencopy_manager_v1 not available".to_string(),
+                ))?;
         let mut event_queue = self._connection.new_event_queue();
         let qh = event_queue.handle();
         let mut frame_states: HashMap<String, Arc<Mutex<FrameState>>> = HashMap::new();
         let mut frames: HashMap<String, ZwlrScreencopyFrameV1> = HashMap::new();
         for param in &parameters {
-            let output_info = self.globals.output_info
+            let output_info = self
+                .globals
+                .output_info
                 .iter()
                 .find(|(_, info)| info.name == param.output_name)
                 .map(|(_, info)| info)
@@ -924,45 +920,41 @@ impl WaylandCapture {
             let region = if let Some(region) = param.region {
                 let output_right = output_info.x + output_info.width;
                 let output_bottom = output_info.y + output_info.height;
-                if
-                    region.x < output_info.x ||
-                    region.y < output_info.y ||
-                    region.x + region.width > output_right ||
-                    region.y + region.height > output_bottom
+                if region.x() < output_info.x
+                    || region.y() < output_info.y
+                    || region.x() + region.width() > output_right
+                    || region.y() + region.height() > output_bottom
                 {
-                    return Err(
-                        Error::InvalidRegion(
-                            "Capture region extends outside output boundaries".to_string()
-                        )
-                    );
+                    return Err(Error::InvalidRegion(
+                        "Capture region extends outside output boundaries".to_string(),
+                    ));
                 }
                 region
             } else {
-                Box::new(output_info.x, output_info.y, output_info.width, output_info.height)
+                Box::new(
+                    output_info.x,
+                    output_info.y,
+                    output_info.width,
+                    output_info.height,
+                )
             };
-            let frame_state = Arc::new(
-                Mutex::new(FrameState {
-                    buffer: None,
-                    width: 0,
-                    height: 0,
-                    format: None,
-                    ready: false,
-                    flags: 0,
-                })
-            );
+            let frame_state = Arc::new(Mutex::new(FrameState {
+                buffer: None,
+                width: 0,
+                height: 0,
+                format: None,
+                ready: false,
+                flags: 0,
+            }));
             let frame = screencopy_manager.capture_output_region(
-                if param.overlay_cursor {
-                    1
-                } else {
-                    0
-                },
+                if param.overlay_cursor { 1 } else { 0 },
                 output,
-                region.x,
-                region.y,
-                region.width,
-                region.height,
+                region.x(),
+                region.y(),
+                region.width(),
+                region.height(),
                 &qh,
-                frame_state.clone()
+                frame_state.clone(),
             );
             frame_states.insert(param.output_name.clone(), frame_state);
             frames.insert(param.output_name.clone(), frame);
@@ -981,15 +973,15 @@ impl WaylandCapture {
             if completed_frames >= total_frames {
                 break;
             }
-            event_queue
-                .blocking_dispatch(self)
-                .map_err(|e|
-                    Error::FrameCapture(format!("Failed to dispatch frame events: {}", e))
-                )?;
+            event_queue.blocking_dispatch(self).map_err(|e| {
+                Error::FrameCapture(format!("Failed to dispatch frame events: {}", e))
+            })?;
             attempts += 1;
         }
         if attempts >= MAX_ATTEMPTS {
-            return Err(Error::FrameCapture("Timeout waiting for frame buffers".to_string()));
+            return Err(Error::FrameCapture(
+                "Timeout waiting for frame buffers".to_string(),
+            ));
         }
         for frame_state in frame_states.values() {
             let state = frame_state.lock().unwrap();
@@ -997,10 +989,8 @@ impl WaylandCapture {
                 return Err(Error::CaptureFailed);
             }
         }
-        let mut buffers: HashMap<
-            String,
-            (tempfile::NamedTempFile, memmap2::MmapMut)
-        > = HashMap::new();
+        let mut buffers: HashMap<String, (tempfile::NamedTempFile, memmap2::MmapMut)> =
+            HashMap::new();
         for (output_name, frame_state) in &frame_states {
             let (width, height, stride, size) = {
                 let state = frame_state.lock().unwrap();
@@ -1010,58 +1000,39 @@ impl WaylandCapture {
                 let size = (stride * height) as usize;
                 (width, height, stride, size)
             };
-            let mut tmp_file = tempfile::NamedTempFile
-                ::new()
-                .map_err(|e|
-                    Error::BufferCreation(
-                        format!(
-                            "failed to create temporary file for output '{}': {}",
-                            output_name,
-                            e
-                        )
-                    )
-                )?;
-            tmp_file
-                .as_file_mut()
-                .set_len(size as u64)
-                .map_err(|e|
-                    Error::BufferCreation(
-                        format!(
-                            "failed to resize buffer for output '{}' to {} bytes: {}",
-                            output_name,
-                            size,
-                            e
-                        )
-                    )
-                )?;
+            let mut tmp_file = tempfile::NamedTempFile::new().map_err(|e| {
+                Error::BufferCreation(format!(
+                    "failed to create temporary file for output '{}': {}",
+                    output_name, e
+                ))
+            })?;
+            tmp_file.as_file_mut().set_len(size as u64).map_err(|e| {
+                Error::BufferCreation(format!(
+                    "failed to resize buffer for output '{}' to {} bytes: {}",
+                    output_name, size, e
+                ))
+            })?;
             let mmap = unsafe {
-                memmap2::MmapMut
-                    ::map_mut(&tmp_file)
-                    .map_err(|e|
-                        Error::BufferCreation(
-                            format!(
-                                "failed to memory-map buffer for output '{}': {}",
-                                output_name,
-                                e
-                            )
-                        )
-                    )?
+                memmap2::MmapMut::map_mut(&tmp_file).map_err(|e| {
+                    Error::BufferCreation(format!(
+                        "failed to memory-map buffer for output '{}': {}",
+                        output_name, e
+                    ))
+                })?
             };
-            let shm = self.globals.shm
-                .as_ref()
-                .ok_or(Error::UnsupportedProtocol("wl_shm not available".to_string()))?;
+            let shm = self.globals.shm.as_ref().ok_or(Error::UnsupportedProtocol(
+                "wl_shm not available".to_string(),
+            ))?;
             {
                 let format = {
                     let state = frame_state.lock().unwrap();
                     state.format.unwrap_or(ShmFormat::Xrgb8888)
                 };
                 let pool = shm.create_pool(
-                    unsafe {
-                        BorrowedFd::borrow_raw(tmp_file.as_file().as_raw_fd())
-                    },
+                    unsafe { BorrowedFd::borrow_raw(tmp_file.as_file().as_raw_fd()) },
                     size as i32,
                     &qh,
-                    ()
+                    (),
                 );
                 let buffer = pool.create_buffer(
                     0,
@@ -1070,7 +1041,7 @@ impl WaylandCapture {
                     stride as i32,
                     format,
                     &qh,
-                    ()
+                    (),
                 );
                 if let Some(frame) = frames.get(output_name) {
                     frame.copy(&buffer);
@@ -1091,24 +1062,22 @@ impl WaylandCapture {
             if completed_frames >= total_frames {
                 break;
             }
-            event_queue
-                .blocking_dispatch(self)
-                .map_err(|e|
-                    Error::FrameCapture(format!("Failed to dispatch frame events: {}", e))
-                )?;
+            event_queue.blocking_dispatch(self).map_err(|e| {
+                Error::FrameCapture(format!("Failed to dispatch frame events: {}", e))
+            })?;
             attempts += 1;
         }
         if attempts >= MAX_ATTEMPTS {
-            return Err(
-                Error::FrameCapture("Timeout waiting for frame capture completion".to_string())
-            );
+            return Err(Error::FrameCapture(
+                "Timeout waiting for frame capture completion".to_string(),
+            ));
         }
         for frame_state in frame_states.values() {
             let state = frame_state.lock().unwrap();
             if state.ready && state.buffer.is_none() {
-                return Err(
-                    Error::FrameCapture("Frame is ready but buffer was not received".to_string())
-                );
+                return Err(Error::FrameCapture(
+                    "Frame is ready but buffer was not received".to_string(),
+                ));
             }
         }
         let mut results: HashMap<String, CaptureResult> = HashMap::new();
@@ -1119,12 +1088,10 @@ impl WaylandCapture {
                 (state.width, state.height)
             };
             let mut buffer_data = mmap.to_vec();
-            if
-                let Some(format) = ({
-                    let state = frame_state.lock().unwrap();
-                    state.format
-                })
-            {
+            if let Some(format) = ({
+                let state = frame_state.lock().unwrap();
+                state.format
+            }) {
                 match format {
                     ShmFormat::Xrgb8888 => {
                         for chunk in buffer_data.chunks_exact_mut(4) {
@@ -1141,21 +1108,22 @@ impl WaylandCapture {
                     _ => {}
                 }
             }
-            results.insert(output_name, CaptureResult {
-                data: buffer_data,
-                width,
-                height,
-            });
+            results.insert(
+                output_name,
+                CaptureResult {
+                    data: buffer_data,
+                    width,
+                    height,
+                },
+            );
         }
-        Ok(MultiOutputCaptureResult {
-            outputs: results,
-        })
+        Ok(MultiOutputCaptureResult { outputs: results })
     }
 
     pub fn capture_outputs_with_scale(
         &mut self,
         parameters: Vec<CaptureParameters>,
-        default_scale: f64
+        default_scale: f64,
     ) -> Result<MultiOutputCaptureResult> {
         let result = self.capture_outputs(parameters)?;
         let mut scaled_results = std::collections::HashMap::new();
@@ -1179,31 +1147,35 @@ impl Dispatch<WlRegistry, ()> for WaylandCapture {
         event: <WlRegistry as Proxy>::Event,
         _: &(),
         _conn: &Connection,
-        qh: &QueueHandle<Self>
+        qh: &QueueHandle<Self>,
     ) {
         use wayland_client::protocol::wl_registry::Event;
-        if let Event::Global { name, interface, version } = event {
+        if let Event::Global {
+            name,
+            interface,
+            version,
+        } = event
+        {
             match interface.as_str() {
                 "wl_compositor" => {
-                    state.globals.compositor = Some(
-                        registry.bind::<WlCompositor, _, _>(name, version, qh, ())
-                    );
+                    state.globals.compositor =
+                        Some(registry.bind::<WlCompositor, _, _>(name, version, qh, ()));
                 }
                 "wl_shm" => {
                     state.globals.shm = Some(registry.bind::<WlShm, _, _>(name, version, qh, ()));
                 }
                 "zwlr_screencopy_manager_v1" => {
-                    state.globals.screencopy_manager = Some(
-                        registry.bind::<ZwlrScreencopyManagerV1, _, _>(name, version, qh, ())
-                    );
+                    state.globals.screencopy_manager =
+                        Some(registry.bind::<ZwlrScreencopyManagerV1, _, _>(name, version, qh, ()));
                 }
                 "zxdg_output_manager_v1" => {
-                    state.globals.xdg_output_manager = Some(
-                        registry.bind::<ZxdgOutputManagerV1, _, _>(name, version, qh, ())
-                    );
+                    state.globals.xdg_output_manager =
+                        Some(registry.bind::<ZxdgOutputManagerV1, _, _>(name, version, qh, ()));
 
                     for output in &state.globals.outputs {
-                        let xdg_output = state.globals.xdg_output_manager
+                        let xdg_output = state
+                            .globals
+                            .xdg_output_manager
                             .as_ref()
                             .unwrap()
                             .get_xdg_output(output, qh, ());
@@ -1215,21 +1187,24 @@ impl Dispatch<WlRegistry, ()> for WaylandCapture {
                     let output = registry.bind::<WlOutput, _, _>(name, version, qh, ());
                     let output_id = output.id().protocol_id();
 
-                    state.globals.output_info.insert(output_id, OutputInfo {
-                        name: format!("output-{}", name),
-                        width: 0,
-                        height: 0,
-                        x: 0,
-                        y: 0,
-                        scale: 1,
-                        transform: wayland_client::protocol::wl_output::Transform::Normal,
-                        logical_x: 0,
-                        logical_y: 0,
-                        logical_width: 0,
-                        logical_height: 0,
-                        logical_scale_known: false,
-                        description: None,
-                    });
+                    state.globals.output_info.insert(
+                        output_id,
+                        OutputInfo {
+                            name: format!("output-{}", name),
+                            width: 0,
+                            height: 0,
+                            x: 0,
+                            y: 0,
+                            scale: 1,
+                            transform: wayland_client::protocol::wl_output::Transform::Normal,
+                            logical_x: 0,
+                            logical_y: 0,
+                            logical_width: 0,
+                            logical_height: 0,
+                            logical_scale_known: false,
+                            description: None,
+                        },
+                    );
                     let output_idx = state.globals.outputs.len();
                     state.globals.outputs.push(output.clone());
 
@@ -1253,9 +1228,9 @@ impl Dispatch<WlOutput, ()> for WaylandCapture {
         event: <WlOutput as Proxy>::Event,
         _: &(),
         _conn: &Connection,
-        _qh: &QueueHandle<Self>
+        _qh: &QueueHandle<Self>,
     ) {
-        use wayland_client::protocol::wl_output::{ Event };
+        use wayland_client::protocol::wl_output::Event;
         let output_id = output.id().protocol_id();
         match event {
             Event::Geometry {
@@ -1280,8 +1255,18 @@ impl Dispatch<WlOutput, ()> for WaylandCapture {
                     }
                 }
             }
-            Event::Mode { flags: _, width, height, refresh: _ } => {
-                log::debug!("Mode event for output_id {}: {}x{}", output_id, width, height);
+            Event::Mode {
+                flags: _,
+                width,
+                height,
+                refresh: _,
+            } => {
+                log::debug!(
+                    "Mode event for output_id {}: {}x{}",
+                    output_id,
+                    width,
+                    height
+                );
                 if let Some(info) = state.globals.output_info.get_mut(&output_id) {
                     info.width = width;
                     info.height = height;
@@ -1320,8 +1305,9 @@ impl Dispatch<WlCompositor, ()> for WaylandCapture {
         _event: <WlCompositor as Proxy>::Event,
         _data: &(),
         _conn: &Connection,
-        _qh: &QueueHandle<Self>
-    ) {}
+        _qh: &QueueHandle<Self>,
+    ) {
+    }
 }
 
 impl Dispatch<WlShm, ()> for WaylandCapture {
@@ -1331,8 +1317,9 @@ impl Dispatch<WlShm, ()> for WaylandCapture {
         _event: <WlShm as Proxy>::Event,
         _data: &(),
         _conn: &Connection,
-        _qh: &QueueHandle<Self>
-    ) {}
+        _qh: &QueueHandle<Self>,
+    ) {
+    }
 }
 
 impl Dispatch<ZwlrScreencopyManagerV1, ()> for WaylandCapture {
@@ -1342,8 +1329,9 @@ impl Dispatch<ZwlrScreencopyManagerV1, ()> for WaylandCapture {
         _event: <ZwlrScreencopyManagerV1 as Proxy>::Event,
         _data: &(),
         _conn: &Connection,
-        _qh: &QueueHandle<Self>
-    ) {}
+        _qh: &QueueHandle<Self>,
+    ) {
+    }
 }
 
 impl Dispatch<ZwlrScreencopyFrameV1, Arc<Mutex<FrameState>>> for WaylandCapture {
@@ -1353,11 +1341,16 @@ impl Dispatch<ZwlrScreencopyFrameV1, Arc<Mutex<FrameState>>> for WaylandCapture 
         event: <ZwlrScreencopyFrameV1 as Proxy>::Event,
         frame_state: &Arc<Mutex<FrameState>>,
         _conn: &Connection,
-        _qh: &QueueHandle<Self>
+        _qh: &QueueHandle<Self>,
     ) {
         use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_frame_v1::Event;
         match event {
-            Event::Buffer { format, width, height, stride } => {
+            Event::Buffer {
+                format,
+                width,
+                height,
+                stride,
+            } => {
                 let mut state = frame_state.lock().unwrap();
                 state.width = width;
                 state.height = height;
@@ -1373,7 +1366,11 @@ impl Dispatch<ZwlrScreencopyFrameV1, Arc<Mutex<FrameState>>> for WaylandCapture 
                     log::debug!("Received flags: {:?} (bits: {})", flags, val.bits());
                 }
             }
-            Event::Ready { tv_sec_hi: _, tv_sec_lo: _, tv_nsec: _ } => {
+            Event::Ready {
+                tv_sec_hi: _,
+                tv_sec_lo: _,
+                tv_nsec: _,
+            } => {
                 let mut state = frame_state.lock().unwrap();
                 state.ready = true;
                 frame.destroy();
@@ -1382,7 +1379,11 @@ impl Dispatch<ZwlrScreencopyFrameV1, Arc<Mutex<FrameState>>> for WaylandCapture 
                 let mut state = frame_state.lock().unwrap();
                 state.ready = true;
             }
-            Event::LinuxDmabuf { format, width, height } => {
+            Event::LinuxDmabuf {
+                format,
+                width,
+                height,
+            } => {
                 // TODO:Обработка LinuxDmabuf - альтернативный способ передачи данных
                 // Пока не поддерживаем, но логируем для отладки
                 log::debug!(
@@ -1409,7 +1410,7 @@ impl Dispatch<ZxdgOutputV1, ()> for WaylandCapture {
         event: <ZxdgOutputV1 as Proxy>::Event,
         _: &(),
         _conn: &Connection,
-        _qh: &QueueHandle<Self>
+        _qh: &QueueHandle<Self>,
     ) {
         use wayland_protocols::xdg::xdg_output::zv1::client::zxdg_output_v1::Event;
 
@@ -1461,8 +1462,9 @@ impl Dispatch<WlBuffer, ()> for WaylandCapture {
         _event: <WlBuffer as Proxy>::Event,
         _data: &(),
         _conn: &Connection,
-        _qh: &QueueHandle<Self>
-    ) {}
+        _qh: &QueueHandle<Self>,
+    ) {
+    }
 }
 
 impl Dispatch<WlShmPool, ()> for WaylandCapture {
@@ -1472,8 +1474,9 @@ impl Dispatch<WlShmPool, ()> for WaylandCapture {
         _event: <WlShmPool as Proxy>::Event,
         _data: &(),
         _conn: &Connection,
-        _qh: &QueueHandle<Self>
-    ) {}
+        _qh: &QueueHandle<Self>,
+    ) {
+    }
 }
 
 impl Dispatch<ZxdgOutputManagerV1, ()> for WaylandCapture {
@@ -1483,8 +1486,9 @@ impl Dispatch<ZxdgOutputManagerV1, ()> for WaylandCapture {
         _event: <ZxdgOutputManagerV1 as Proxy>::Event,
         _data: &(),
         _conn: &Connection,
-        _qh: &QueueHandle<Self>
-    ) {}
+        _qh: &QueueHandle<Self>,
+    ) {
+    }
 }
 
 #[derive(Debug, Clone)]

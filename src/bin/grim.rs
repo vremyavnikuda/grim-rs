@@ -1,8 +1,8 @@
-use grim_rs::{ Grim, Box as GrimBox, CaptureParameters };
+use grim_rs::{Box as GrimBox, CaptureParameters, Grim};
 use std::env;
-use std::path::{ Path, PathBuf };
 use std::fs;
-use std::io::{ self, BufRead };
+use std::io::{self, BufRead};
+use std::path::{Path, PathBuf};
 
 fn main() -> grim_rs::Result<()> {
     let args: Vec<String> = env::args().collect();
@@ -22,18 +22,12 @@ fn main() -> grim_rs::Result<()> {
                     eprintln!("Error: -s requires an argument");
                     std::process::exit(1);
                 }
-                opts.scale = Some(
-                    args[arg_idx]
-                        .parse::<f64>()
-                        .map_err(|_| {
-                            grim_rs::Error::Io(
-                                std::io::Error::new(
-                                    std::io::ErrorKind::InvalidInput,
-                                    "Invalid scale factor"
-                                )
-                            )
-                        })?
-                );
+                opts.scale = Some(args[arg_idx].parse::<f64>().map_err(|_| {
+                    grim_rs::Error::Io(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "Invalid scale factor",
+                    ))
+                })?);
             }
             "-g" => {
                 arg_idx += 1;
@@ -75,16 +69,12 @@ fn main() -> grim_rs::Result<()> {
                     eprintln!("Error: -q requires an argument");
                     std::process::exit(1);
                 }
-                let quality: i32 = args[arg_idx]
-                    .parse()
-                    .map_err(|_| {
-                        grim_rs::Error::Io(
-                            std::io::Error::new(
-                                std::io::ErrorKind::InvalidInput,
-                                "Invalid quality value"
-                            )
-                        )
-                    })?;
+                let quality: i32 = args[arg_idx].parse().map_err(|_| {
+                    grim_rs::Error::Io(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "Invalid quality value",
+                    ))
+                })?;
                 if !(0..=100).contains(&quality) {
                     eprintln!("Error: JPEG quality must be between 0 and 100");
                     std::process::exit(1);
@@ -97,16 +87,12 @@ fn main() -> grim_rs::Result<()> {
                     eprintln!("Error: -l requires an argument");
                     std::process::exit(1);
                 }
-                let level: i32 = args[arg_idx]
-                    .parse()
-                    .map_err(|_| {
-                        grim_rs::Error::Io(
-                            std::io::Error::new(
-                                std::io::ErrorKind::InvalidInput,
-                                "Invalid compression level"
-                            )
-                        )
-                    })?;
+                let level: i32 = args[arg_idx].parse().map_err(|_| {
+                    grim_rs::Error::Io(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "Invalid compression level",
+                    ))
+                })?;
                 if level > 9 {
                     eprintln!("Error: PNG compression level must be between 0 and 9");
                     std::process::exit(1);
@@ -152,7 +138,8 @@ fn main() -> grim_rs::Result<()> {
                 overlay_cursor: opts.with_cursor,
                 scale: opts.scale,
             }];
-            let multi_result = grim.capture_outputs_with_scale(params, opts.scale.unwrap_or(1.0))?;
+            let multi_result =
+                grim.capture_outputs_with_scale(params, opts.scale.unwrap_or(1.0))?;
             if let Some(capture_result) = multi_result.outputs.get(output_name) {
                 capture_result.clone()
             } else {
@@ -178,7 +165,7 @@ fn main() -> grim_rs::Result<()> {
                         &result.data,
                         result.width,
                         result.height,
-                        opts.png_level
+                        opts.png_level,
                     )?;
                 }
             }
@@ -195,7 +182,7 @@ fn main() -> grim_rs::Result<()> {
                         &result.data,
                         result.width,
                         result.height,
-                        opts.jpeg_quality
+                        opts.jpeg_quality,
                     )?;
                 }
             }
@@ -213,7 +200,7 @@ fn main() -> grim_rs::Result<()> {
                         result.width,
                         result.height,
                         path,
-                        opts.png_level
+                        opts.png_level,
                     )?;
                 }
             }
@@ -225,18 +212,16 @@ fn main() -> grim_rs::Result<()> {
                     #[cfg(feature = "jpeg")]
                     grim.save_jpeg(&result.data, result.width, result.height, path)?;
                     #[cfg(not(feature = "jpeg"))]
-                    return Err(
-                        grim_rs::Error::ImageProcessing(
-                            image::ImageError::Unsupported(
-                                image::error::UnsupportedError::from_format_and_kind(
-                                    image::error::ImageFormatHint::Name("JPEG".to_string()),
-                                    image::error::UnsupportedErrorKind::Format(
-                                        image::ImageFormat::Jpeg.into()
-                                    )
-                                )
-                            )
-                        )
-                    );
+                    return Err(grim_rs::Error::ImageProcessing(
+                        image::ImageError::Unsupported(
+                            image::error::UnsupportedError::from_format_and_kind(
+                                image::error::ImageFormatHint::Name("JPEG".to_string()),
+                                image::error::UnsupportedErrorKind::Format(
+                                    image::ImageFormat::Jpeg.into(),
+                                ),
+                            ),
+                        ),
+                    ));
                 } else {
                     #[cfg(feature = "jpeg")]
                     grim.save_jpeg_with_quality(
@@ -244,21 +229,19 @@ fn main() -> grim_rs::Result<()> {
                         result.width,
                         result.height,
                         path,
-                        opts.jpeg_quality
+                        opts.jpeg_quality,
                     )?;
                     #[cfg(not(feature = "jpeg"))]
-                    return Err(
-                        grim_rs::Error::ImageProcessing(
-                            image::ImageError::Unsupported(
-                                image::error::UnsupportedError::from_format_and_kind(
-                                    image::error::ImageFormatHint::Name("JPEG".to_string()),
-                                    image::error::UnsupportedErrorKind::Format(
-                                        image::ImageFormat::Jpeg.into()
-                                    )
-                                )
-                            )
-                        )
-                    );
+                    return Err(grim_rs::Error::ImageProcessing(
+                        image::ImageError::Unsupported(
+                            image::error::UnsupportedError::from_format_and_kind(
+                                image::error::ImageFormatHint::Name("JPEG".to_string()),
+                                image::error::UnsupportedErrorKind::Format(
+                                    image::ImageFormat::Jpeg.into(),
+                                ),
+                            ),
+                        ),
+                    ));
                 }
             }
         }
@@ -346,14 +329,11 @@ fn get_xdg_pictures_dir() -> Option<PathBuf> {
     }
 
     // Parse ~/.config/user-dirs.dirs
-    let config_home = env
-        ::var("XDG_CONFIG_HOME")
-        .ok()
-        .or_else(|| {
-            env::var("HOME")
-                .ok()
-                .map(|home| format!("{}/.config", home))
-        })?;
+    let config_home = env::var("XDG_CONFIG_HOME").ok().or_else(|| {
+        env::var("HOME")
+            .ok()
+            .map(|home| format!("{}/.config", home))
+    })?;
 
     let user_dirs_file = PathBuf::from(config_home).join("user-dirs.dirs");
 
@@ -399,13 +379,7 @@ fn get_output_dir() -> PathBuf {
     // GRIM_DEFAULT_DIR
     if let Ok(default_dir) = env::var("GRIM_DEFAULT_DIR") {
         let path = PathBuf::from(default_dir);
-        if
-            path.exists() ||
-            path
-                .parent()
-                .map(|p| p.exists())
-                .unwrap_or(false)
-        {
+        if path.exists() || path.parent().map(|p| p.exists()).unwrap_or(false) {
             return path;
         }
     }

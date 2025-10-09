@@ -36,7 +36,7 @@ pub mod geometry;
 
 mod wayland_capture;
 
-pub use error::{ Error, Result };
+pub use error::{Error, Result};
 pub use geometry::Box;
 
 use wayland_capture::WaylandCapture as PlatformCapture;
@@ -170,7 +170,7 @@ impl Grim {
     /// let outputs = grim.get_outputs()?;
     ///
     /// for output in outputs {
-    ///     println!("Output: {} ({}x{})", output.name, output.geometry.width, output.geometry.height);
+    ///     println!("Output: {} ({}x{})", output.name, output.geometry.width(), output.geometry.height());
     /// }
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
@@ -300,9 +300,10 @@ impl Grim {
     pub fn capture_output_with_scale(
         &mut self,
         output_name: &str,
-        scale: f64
+        scale: f64,
     ) -> Result<CaptureResult> {
-        self.platform_capture.capture_output_with_scale(output_name, scale)
+        self.platform_capture
+            .capture_output_with_scale(output_name, scale)
     }
 
     /// Capture a specific region.
@@ -365,7 +366,8 @@ impl Grim {
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
     pub fn capture_region_with_scale(&mut self, region: Box, scale: f64) -> Result<CaptureResult> {
-        self.platform_capture.capture_region_with_scale(region, scale)
+        self.platform_capture
+            .capture_region_with_scale(region, scale)
     }
 
     /// Capture multiple outputs with different parameters.
@@ -427,7 +429,7 @@ impl Grim {
     /// ```
     pub fn capture_outputs(
         &mut self,
-        parameters: Vec<CaptureParameters>
+        parameters: Vec<CaptureParameters>,
     ) -> Result<MultiOutputCaptureResult> {
         self.platform_capture.capture_outputs(parameters)
     }
@@ -447,9 +449,10 @@ impl Grim {
     pub fn capture_outputs_with_scale(
         &mut self,
         parameters: Vec<CaptureParameters>,
-        default_scale: f64
+        default_scale: f64,
     ) -> Result<MultiOutputCaptureResult> {
-        self.platform_capture.capture_outputs_with_scale(parameters, default_scale)
+        self.platform_capture
+            .capture_outputs_with_scale(parameters, default_scale)
     }
 
     /// Save captured data as PNG.
@@ -490,7 +493,7 @@ impl Grim {
         data: &[u8],
         width: u32,
         height: u32,
-        path: P
+        path: P,
     ) -> Result<()> {
         self.save_png_with_compression(data, width, height, path, 6) // Default compression level of 6
     }
@@ -535,22 +538,18 @@ impl Grim {
         width: u32,
         height: u32,
         path: P,
-        compression: u8
+        compression: u8,
     ) -> Result<()> {
-        use image::{ ImageBuffer, Rgba };
+        use image::{ImageBuffer, Rgba};
         use std::io::BufWriter;
 
-        let _img = ImageBuffer::<Rgba<u8>, _>
-            ::from_raw(width, height, data.to_vec())
-            .ok_or(
-                Error::ImageProcessing(
-                    image::ImageError::Parameter(
-                        image::error::ParameterError::from_kind(
-                            image::error::ParameterErrorKind::DimensionMismatch
-                        )
-                    )
-                )
-            )?;
+        let _img = ImageBuffer::<Rgba<u8>, _>::from_raw(width, height, data.to_vec()).ok_or(
+            Error::ImageProcessing(image::ImageError::Parameter(
+                image::error::ParameterError::from_kind(
+                    image::error::ParameterErrorKind::DimensionMismatch,
+                ),
+            )),
+        )?;
 
         let file = std::fs::File::create(&path).map_err(|e| Error::IoWithContext {
             operation: format!("creating output file '{}'", path.as_ref().display()),
@@ -571,37 +570,25 @@ impl Grim {
         encoder.set_color(png::ColorType::Rgba);
         encoder.set_filter(png::FilterType::NoFilter);
 
-        let mut writer = encoder
-            .write_header()
-            .map_err(|e|
-                Error::Io(
-                    std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("PNG encoding error: {}", e)
-                    )
-                )
-            )?;
+        let mut writer = encoder.write_header().map_err(|e| {
+            Error::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("PNG encoding error: {}", e),
+            ))
+        })?;
 
-        writer
-            .write_image_data(data)
-            .map_err(|e|
-                Error::Io(
-                    std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("PNG encoding error: {}", e)
-                    )
-                )
-            )?;
-        writer
-            .finish()
-            .map_err(|e|
-                Error::Io(
-                    std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("PNG encoding error: {}", e)
-                    )
-                )
-            )?;
+        writer.write_image_data(data).map_err(|e| {
+            Error::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("PNG encoding error: {}", e),
+            ))
+        })?;
+        writer.finish().map_err(|e| {
+            Error::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("PNG encoding error: {}", e),
+            ))
+        })?;
 
         Ok(())
     }
@@ -648,7 +635,7 @@ impl Grim {
         data: &[u8],
         width: u32,
         height: u32,
-        path: P
+        path: P,
     ) -> Result<()> {
         self.save_jpeg_with_quality(data, width, height, path, 80) // Default quality of 80
     }
@@ -697,21 +684,17 @@ impl Grim {
         width: u32,
         height: u32,
         path: P,
-        quality: u8
+        quality: u8,
     ) -> Result<()> {
-        use image::{ ImageBuffer, Rgba, Rgb, buffer::ConvertBuffer };
+        use image::{buffer::ConvertBuffer, ImageBuffer, Rgb, Rgba};
 
-        let rgba_img = ImageBuffer::<Rgba<u8>, _>
-            ::from_raw(width, height, data.to_vec())
-            .ok_or(
-                Error::ImageProcessing(
-                    image::ImageError::Parameter(
-                        image::error::ParameterError::from_kind(
-                            image::error::ParameterErrorKind::DimensionMismatch
-                        )
-                    )
-                )
-            )?;
+        let rgba_img = ImageBuffer::<Rgba<u8>, _>::from_raw(width, height, data.to_vec()).ok_or(
+            Error::ImageProcessing(image::ImageError::Parameter(
+                image::error::ParameterError::from_kind(
+                    image::error::ParameterErrorKind::DimensionMismatch,
+                ),
+            )),
+        )?;
 
         let rgb_img: ImageBuffer<Rgb<u8>, Vec<u8>> = rgba_img.convert();
 
@@ -723,15 +706,18 @@ impl Grim {
         let rgb_data = rgb_img.as_raw();
 
         _encoder
-            .encode(rgb_data, width as u16, height as u16, jpeg_encoder::ColorType::Rgb)
-            .map_err(|e|
-                Error::Io(
-                    std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("JPEG encoding error: {}", e)
-                    )
-                )
-            )?;
+            .encode(
+                rgb_data,
+                width as u16,
+                height as u16,
+                jpeg_encoder::ColorType::Rgb,
+            )
+            .map_err(|e| {
+                Error::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("JPEG encoding error: {}", e),
+                ))
+            })?;
 
         Ok(())
     }
@@ -749,18 +735,14 @@ impl Grim {
         _data: &[u8],
         _width: u32,
         _height: u32,
-        _path: P
+        _path: P,
     ) -> Result<()> {
-        Err(
-            Error::ImageProcessing(
-                image::ImageError::Unsupported(
-                    image::error::UnsupportedError::from_format_and_kind(
-                        image::error::ImageFormatHint::Name("JPEG".to_string()),
-                        image::error::UnsupportedErrorKind::Format(image::ImageFormat::Jpeg.into())
-                    )
-                )
-            )
-        )
+        Err(Error::ImageProcessing(image::ImageError::Unsupported(
+            image::error::UnsupportedError::from_format_and_kind(
+                image::error::ImageFormatHint::Name("JPEG".to_string()),
+                image::error::UnsupportedErrorKind::Format(image::ImageFormat::Jpeg.into()),
+            ),
+        )))
     }
 
     /// Save captured data as JPEG with quality control (stub when feature is disabled).
@@ -777,18 +759,14 @@ impl Grim {
         _width: u32,
         _height: u32,
         _path: P,
-        _quality: u8
+        _quality: u8,
     ) -> Result<()> {
-        Err(
-            Error::ImageProcessing(
-                image::ImageError::Unsupported(
-                    image::error::UnsupportedError::from_format_and_kind(
-                        image::error::ImageFormatHint::Name("JPEG".to_string()),
-                        image::error::UnsupportedErrorKind::Format(image::ImageFormat::Jpeg.into())
-                    )
-                )
-            )
-        )
+        Err(Error::ImageProcessing(image::ImageError::Unsupported(
+            image::error::UnsupportedError::from_format_and_kind(
+                image::error::ImageFormatHint::Name("JPEG".to_string()),
+                image::error::UnsupportedErrorKind::Format(image::ImageFormat::Jpeg.into()),
+            ),
+        )))
     }
 
     /// Get image data as JPEG bytes.
@@ -869,21 +847,17 @@ impl Grim {
         data: &[u8],
         width: u32,
         height: u32,
-        quality: u8
+        quality: u8,
     ) -> Result<Vec<u8>> {
-        use image::{ ImageBuffer, Rgba, Rgb, buffer::ConvertBuffer };
+        use image::{buffer::ConvertBuffer, ImageBuffer, Rgb, Rgba};
 
-        let rgba_img = ImageBuffer::<Rgba<u8>, _>
-            ::from_raw(width, height, data.to_vec())
-            .ok_or(
-                Error::ImageProcessing(
-                    image::ImageError::Parameter(
-                        image::error::ParameterError::from_kind(
-                            image::error::ParameterErrorKind::DimensionMismatch
-                        )
-                    )
-                )
-            )?;
+        let rgba_img = ImageBuffer::<Rgba<u8>, _>::from_raw(width, height, data.to_vec()).ok_or(
+            Error::ImageProcessing(image::ImageError::Parameter(
+                image::error::ParameterError::from_kind(
+                    image::error::ParameterErrorKind::DimensionMismatch,
+                ),
+            )),
+        )?;
 
         let rgb_img: ImageBuffer<Rgb<u8>, Vec<u8>> = rgba_img.convert();
 
@@ -892,15 +866,18 @@ impl Grim {
         let rgb_data = rgb_img.as_raw();
 
         _encoder
-            .encode(rgb_data, width as u16, height as u16, jpeg_encoder::ColorType::Rgb)
-            .map_err(|e|
-                Error::Io(
-                    std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("JPEG encoding error: {}", e)
-                    )
-                )
-            )?;
+            .encode(
+                rgb_data,
+                width as u16,
+                height as u16,
+                jpeg_encoder::ColorType::Rgb,
+            )
+            .map_err(|e| {
+                Error::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("JPEG encoding error: {}", e),
+                ))
+            })?;
 
         Ok(jpeg_data)
     }
@@ -914,16 +891,12 @@ impl Grim {
     /// Always returns an error indicating that JPEG support is not enabled.
     #[cfg(not(feature = "jpeg"))]
     pub fn to_jpeg(&self, _data: &[u8], _width: u32, _height: u32) -> Result<Vec<u8>> {
-        Err(
-            Error::ImageProcessing(
-                image::ImageError::Unsupported(
-                    image::error::UnsupportedError::from_format_and_kind(
-                        image::error::ImageFormatHint::Name("JPEG".to_string()),
-                        image::error::UnsupportedErrorKind::Format(image::ImageFormat::Jpeg.into())
-                    )
-                )
-            )
-        )
+        Err(Error::ImageProcessing(image::ImageError::Unsupported(
+            image::error::UnsupportedError::from_format_and_kind(
+                image::error::ImageFormatHint::Name("JPEG".to_string()),
+                image::error::UnsupportedErrorKind::Format(image::ImageFormat::Jpeg.into()),
+            ),
+        )))
     }
 
     /// Get image data as JPEG bytes with quality control (stub when feature is disabled).
@@ -939,18 +912,14 @@ impl Grim {
         _data: &[u8],
         _width: u32,
         _height: u32,
-        _quality: u8
+        _quality: u8,
     ) -> Result<Vec<u8>> {
-        Err(
-            Error::ImageProcessing(
-                image::ImageError::Unsupported(
-                    image::error::UnsupportedError::from_format_and_kind(
-                        image::error::ImageFormatHint::Name("JPEG".to_string()),
-                        image::error::UnsupportedErrorKind::Format(image::ImageFormat::Jpeg.into())
-                    )
-                )
-            )
-        )
+        Err(Error::ImageProcessing(image::ImageError::Unsupported(
+            image::error::UnsupportedError::from_format_and_kind(
+                image::error::ImageFormatHint::Name("JPEG".to_string()),
+                image::error::UnsupportedErrorKind::Format(image::ImageFormat::Jpeg.into()),
+            ),
+        )))
     }
 
     /// Get image data as PNG bytes.
@@ -1023,22 +992,18 @@ impl Grim {
         data: &[u8],
         width: u32,
         height: u32,
-        compression: u8
+        compression: u8,
     ) -> Result<Vec<u8>> {
-        use image::{ ImageBuffer, Rgba };
+        use image::{ImageBuffer, Rgba};
         use std::io::Cursor;
 
-        let _img = ImageBuffer::<Rgba<u8>, _>
-            ::from_raw(width, height, data.to_vec())
-            .ok_or(
-                Error::ImageProcessing(
-                    image::ImageError::Parameter(
-                        image::error::ParameterError::from_kind(
-                            image::error::ParameterErrorKind::DimensionMismatch
-                        )
-                    )
-                )
-            )?;
+        let _img = ImageBuffer::<Rgba<u8>, _>::from_raw(width, height, data.to_vec()).ok_or(
+            Error::ImageProcessing(image::ImageError::Parameter(
+                image::error::ParameterError::from_kind(
+                    image::error::ParameterErrorKind::DimensionMismatch,
+                ),
+            )),
+        )?;
 
         let mut output = Vec::new();
         {
@@ -1057,37 +1022,25 @@ impl Grim {
             encoder.set_color(png::ColorType::Rgba);
             encoder.set_filter(png::FilterType::NoFilter);
 
-            let mut writer = encoder
-                .write_header()
-                .map_err(|e|
-                    Error::Io(
-                        std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("PNG encoding error: {}", e)
-                        )
-                    )
-                )?;
+            let mut writer = encoder.write_header().map_err(|e| {
+                Error::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("PNG encoding error: {}", e),
+                ))
+            })?;
 
-            writer
-                .write_image_data(data)
-                .map_err(|e|
-                    Error::Io(
-                        std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("PNG encoding error: {}", e)
-                        )
-                    )
-                )?;
-            writer
-                .finish()
-                .map_err(|e|
-                    Error::Io(
-                        std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("PNG encoding error: {}", e)
-                        )
-                    )
-                )?;
+            writer.write_image_data(data).map_err(|e| {
+                Error::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("PNG encoding error: {}", e),
+                ))
+            })?;
+            writer.finish().map_err(|e| {
+                Error::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("PNG encoding error: {}", e),
+                ))
+            })?;
         }
 
         Ok(output)
@@ -1131,7 +1084,7 @@ impl Grim {
         data: &[u8],
         width: u32,
         height: u32,
-        path: P
+        path: P,
     ) -> Result<()> {
         let ppm_data = self.to_ppm(data, width, height)?;
         std::fs::write(&path, ppm_data).map_err(|e| Error::IoWithContext {
@@ -1209,7 +1162,7 @@ impl Grim {
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
     pub fn read_region_from_stdin() -> Result<Box> {
-        use std::io::{ self, BufRead };
+        use std::io::{self, BufRead};
 
         let stdin = io::stdin();
         let mut handle = stdin.lock();
@@ -1291,7 +1244,7 @@ impl Grim {
         data: &[u8],
         width: u32,
         height: u32,
-        compression: u8
+        compression: u8,
     ) -> Result<()> {
         let png_data = self.to_png_with_compression(data, width, height, compression)?;
         use std::io::Write;
@@ -1368,7 +1321,7 @@ impl Grim {
         data: &[u8],
         width: u32,
         height: u32,
-        quality: u8
+        quality: u8,
     ) -> Result<()> {
         let jpeg_data = self.to_jpeg_with_quality(data, width, height, quality)?;
         use std::io::Write;
@@ -1429,10 +1382,10 @@ mod tests {
     #[test]
     fn test_geometry_parsing() {
         let geometry: Box = "100,200 800x600".parse().unwrap();
-        assert_eq!(geometry.x, 100);
-        assert_eq!(geometry.y, 200);
-        assert_eq!(geometry.width, 800);
-        assert_eq!(geometry.height, 600);
+        assert_eq!(geometry.x(), 100);
+        assert_eq!(geometry.y(), 200);
+        assert_eq!(geometry.width(), 800);
+        assert_eq!(geometry.height(), 600);
     }
 
     #[test]
@@ -1445,7 +1398,10 @@ mod tests {
         match result {
             Ok(capture_result) => {
                 if let Ok(capture) = capture_result {
-                    assert_eq!(capture.data.len(), (capture.width * capture.height * 4) as usize);
+                    assert_eq!(
+                        capture.data.len(),
+                        (capture.width * capture.height * 4) as usize
+                    );
                 } else {
                     assert!(matches!(capture_result, Err(Error::NoOutputs)));
                 }
@@ -1500,10 +1456,10 @@ mod tests {
         let result: std::result::Result<Box, _> = region_str.parse();
         assert!(result.is_ok());
         let region = result.unwrap();
-        assert_eq!(region.x, 10);
-        assert_eq!(region.y, 20);
-        assert_eq!(region.width, 300);
-        assert_eq!(region.height, 400);
+        assert_eq!(region.x(), 10);
+        assert_eq!(region.y(), 20);
+        assert_eq!(region.width(), 300);
+        assert_eq!(region.height(), 400);
     }
 
     #[test]

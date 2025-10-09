@@ -18,7 +18,11 @@ fn test_filename_format() {
     );
 
     let year: u32 = filename[0..4].parse().expect("Failed to parse year");
-    assert!(year >= 2020 && year <= 2100, "Year {} is out of reasonable range", year);
+    assert!(
+        year >= 2020 && year <= 2100,
+        "Year {} is out of reasonable range",
+        year
+    );
 
     let month: u32 = filename[4..6].parse().expect("Failed to parse month");
     assert!(month >= 1 && month <= 12, "Month {} is invalid", month);
@@ -61,10 +65,22 @@ fn test_filename_readability() {
     );
 
     // Verify it contains readable separators
-    assert!(filename.contains("h"), "Filename missing hour separator 'h'");
-    assert!(filename.contains("m"), "Filename missing minute separator 'm'");
-    assert!(filename.contains("s"), "Filename missing second separator 's'");
-    assert!(filename.contains("_grim"), "Filename missing '_grim' identifier");
+    assert!(
+        filename.contains("h"),
+        "Filename missing hour separator 'h'"
+    );
+    assert!(
+        filename.contains("m"),
+        "Filename missing minute separator 'm'"
+    );
+    assert!(
+        filename.contains("s"),
+        "Filename missing second separator 's'"
+    );
+    assert!(
+        filename.contains("_grim"),
+        "Filename missing '_grim' identifier"
+    );
 
     println!("✓ Filename readability test passed: {}", filename);
 }
