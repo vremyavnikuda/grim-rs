@@ -57,15 +57,11 @@ fn test_box_string_parsing() {
 #[test]
 fn test_capture_result_struct() {
     let data = vec![255u8; 400];
-    let result = CaptureResult {
-        data,
-        width: 10,
-        height: 10,
-    };
+    let result = CaptureResult::new(data, 10, 10);
 
-    assert_eq!(result.width, 10);
-    assert_eq!(result.height, 10);
-    assert_eq!(result.data.len(), 400); // 10x10x4
+    assert_eq!(result.width(), 10);
+    assert_eq!(result.height(), 10);
+    assert_eq!(result.data().len(), 400); // 10x10x4
 }
 
 #[test]
@@ -104,11 +100,7 @@ fn test_crate_export_structs() {
         overlay_cursor: false,
         scale: None,
     };
-    let _result = CaptureResult {
-        data: vec![],
-        width: 0,
-        height: 0,
-    };
+    let _result = CaptureResult::new(vec![], 0, 0);
 }
 
 #[test]
@@ -219,19 +211,11 @@ fn test_multi_output_capture_result() {
     let mut outputs_map = HashMap::new();
     outputs_map.insert(
         "output1".to_string(),
-        CaptureResult {
-            data: vec![255u8; 100 * 100 * 4],
-            width: 100,
-            height: 100,
-        },
+        CaptureResult::new(vec![255u8; 100 * 100 * 4], 100, 100),
     );
     outputs_map.insert(
         "output2".to_string(),
-        CaptureResult {
-            data: vec![128u8; 200 * 150 * 4],
-            width: 200,
-            height: 150,
-        },
+        CaptureResult::new(vec![128u8; 200 * 150 * 4], 200, 150),
     );
 
     let multi_result = grim_rs::MultiOutputCaptureResult {
@@ -243,9 +227,9 @@ fn test_multi_output_capture_result() {
     assert!(multi_result.outputs.contains_key("output2"));
 
     let output1_result = multi_result.outputs.get("output1").unwrap();
-    assert_eq!(output1_result.width, 100);
-    assert_eq!(output1_result.height, 100);
-    assert_eq!(output1_result.data.len(), 100 * 100 * 4);
+    assert_eq!(output1_result.width(), 100);
+    assert_eq!(output1_result.height(), 100);
+    assert_eq!(output1_result.data().len(), 100 * 100 * 4);
 }
 
 #[test]

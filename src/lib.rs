@@ -26,7 +26,7 @@
 //!
 //! // Generate timestamped filename (like grim-rs does by default)
 //! let filename = format!("{}_grim.png", Local::now().format("%Y%m%d_%Hh%Mm%Ss"));
-//! grim.save_png(&result.data, result.width, result.height, &filename)?;
+//! grim.save_png(result.data(), result.width(), result.height(), &filename)?;
 //! # Ok(())
 //! # }
 //! ```
@@ -49,11 +49,37 @@ pub struct CaptureResult {
     /// Raw RGBA image data.
     ///
     /// Each pixel is represented by 4 bytes in RGBA format (Red, Green, Blue, Alpha).
-    pub data: Vec<u8>,
+    data: Vec<u8>,
     /// Width of the captured image in pixels.
-    pub width: u32,
+    width: u32,
     /// Height of the captured image in pixels.
-    pub height: u32,
+    height: u32,
+}
+
+impl CaptureResult {
+    pub fn new(data: Vec<u8>, width: u32, height: u32) -> Self {
+        Self {
+            data,
+            width,
+            height,
+        }
+    }
+
+    pub fn data(&self) -> &[u8] {
+        &self.data
+    }
+
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
+    pub fn into_data(self) -> Vec<u8> {
+        self.data
+    }
 }
 
 /// Information about a display output.
@@ -197,7 +223,7 @@ impl Grim {
     ///
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
-    /// println!("Captured screen: {}x{}", result.width, result.height);
+    /// println!("Captured screen: {}x{}", result.width(), result.height());
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
     pub fn capture_all(&mut self) -> Result<CaptureResult> {
@@ -227,7 +253,7 @@ impl Grim {
     ///
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all_with_scale(1.0)?;
-    /// println!("Captured screen: {}x{}", result.width, result.height);
+    /// println!("Captured screen: {}x{}", result.width(), result.height());
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
     pub fn capture_all_with_scale(&mut self, scale: f64) -> Result<CaptureResult> {
@@ -259,7 +285,7 @@ impl Grim {
     /// let outputs = grim.get_outputs()?;
     /// if let Some(output) = outputs.first() {
     ///     let result = grim.capture_output(&output.name)?;
-    ///     println!("Captured output: {}x{}", result.width, result.height);
+    ///     println!("Captured output: {}x{}", result.width(), result.height());
     /// }
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
@@ -293,7 +319,7 @@ impl Grim {
     /// let outputs = grim.get_outputs()?;
     /// if let Some(output) = outputs.first() {
     ///     let result = grim.capture_output_with_scale(&output.name, 0.5)?;
-    ///     println!("Captured output at 50% scale: {}x{}", result.width, result.height);
+    ///     println!("Captured output at 50% scale: {}x{}", result.width(), result.height());
     /// }
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
@@ -330,7 +356,7 @@ impl Grim {
     /// // x=100, y=100, width=800, height=600
     /// let region = Box::new(100, 100, 800, 600);
     /// let result = grim.capture_region(region)?;
-    /// println!("Captured region: {}x{}", result.width, result.height);
+    /// println!("Captured region: {}x{}", result.width(), result.height());
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
     pub fn capture_region(&mut self, region: Box) -> Result<CaptureResult> {
@@ -362,7 +388,7 @@ impl Grim {
     /// // x=100, y=100, width=800, height=600
     /// let region = Box::new(100, 100, 800, 600);
     /// let result = grim.capture_region_with_scale(region, 1.0)?;
-    /// println!("Captured region: {}x{}", result.width, result.height);
+    /// println!("Captured region: {}x{}", result.width(), result.height());
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
     pub fn capture_region_with_scale(&mut self, region: Box, scale: f64) -> Result<CaptureResult> {
@@ -484,7 +510,7 @@ impl Grim {
     ///
     /// // Generate timestamped filename
     /// let filename = format!("{}_grim.png", Local::now().format("%Y%m%d_%Hh%Mm%Ss"));
-    /// grim.save_png(&result.data, result.width, result.height, &filename)?;
+    /// grim.save_png(result.data(), result.width(), result.height(), &filename)?;
     /// # Ok(())
     /// # }
     /// ```
@@ -528,7 +554,7 @@ impl Grim {
     ///
     /// // Generate timestamped filename
     /// let filename = format!("{}_grim.png", Local::now().format("%Y%m%d_%Hh%Mm%Ss"));
-    /// grim.save_png_with_compression(&result.data, result.width, result.height, &filename, 9)?;
+    /// grim.save_png_with_compression(result.data(), result.width(), result.height(), &filename, 9)?;
     /// # Ok(())
     /// # }
     /// ```
@@ -625,7 +651,7 @@ impl Grim {
     ///
     /// // Generate timestamped filename
     /// let filename = format!("{}_grim.jpg", Local::now().format("%Y%m%d_%Hh%Mm%Ss"));
-    /// grim.save_jpeg(&result.data, result.width, result.height, &filename)?;
+    /// grim.save_jpeg(result.data(), result.width(), result.height(), &filename)?;
     /// # Ok(())
     /// # }
     /// ```
@@ -673,7 +699,7 @@ impl Grim {
     ///
     /// // Generate timestamped filename
     /// let filename = format!("{}_grim.jpg", Local::now().format("%Y%m%d_%Hh%Mm%Ss"));
-    /// grim.save_jpeg_with_quality(&result.data, result.width, result.height, &filename, 90)?;
+    /// grim.save_jpeg_with_quality(result.data(), result.width(), result.height(), &filename, 90)?;
     /// # Ok(())
     /// # }
     /// ```
@@ -798,7 +824,7 @@ impl Grim {
     ///
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
-    /// let jpeg_bytes = grim.to_jpeg(&result.data, result.width, result.height)?;
+    /// let jpeg_bytes = grim.to_jpeg(result.data(), result.width(), result.height())?;
     /// println!("JPEG data size: {} bytes", jpeg_bytes.len());
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
@@ -837,7 +863,7 @@ impl Grim {
     ///
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
-    /// let jpeg_bytes = grim.to_jpeg_with_quality(&result.data, result.width, result.height, 90)?;
+    /// let jpeg_bytes = grim.to_jpeg_with_quality(result.data(), result.width(), result.height(), 90)?;
     /// println!("JPEG data size: {} bytes", jpeg_bytes.len());
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
@@ -948,7 +974,7 @@ impl Grim {
     ///
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
-    /// let png_bytes = grim.to_png(&result.data, result.width, result.height)?;
+    /// let png_bytes = grim.to_png(result.data(), result.width(), result.height())?;
     /// println!("PNG data size: {} bytes", png_bytes.len());
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
@@ -983,7 +1009,7 @@ impl Grim {
     ///
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
-    /// let png_bytes = grim.to_png_with_compression(&result.data, result.width, result.height, 9)?;
+    /// let png_bytes = grim.to_png_with_compression(result.data(), result.width(), result.height(), 9)?;
     /// println!("PNG data size: {} bytes", png_bytes.len());
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
@@ -1075,7 +1101,7 @@ impl Grim {
     ///
     /// // Generate timestamped filename
     /// let filename = format!("{}_grim.ppm", Local::now().format("%Y%m%d_%Hh%Mm%Ss"));
-    /// grim.save_ppm(&result.data, result.width, result.height, &filename)?;
+    /// grim.save_ppm(result.data(), result.width(), result.height(), &filename)?;
     /// # Ok(())
     /// # }
     /// ```
@@ -1120,7 +1146,7 @@ impl Grim {
     ///
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
-    /// let ppm_bytes = grim.to_ppm(&result.data, result.width, result.height)?;
+    /// let ppm_bytes = grim.to_ppm(result.data(), result.width(), result.height())?;
     /// println!("PPM data size: {} bytes", ppm_bytes.len());
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
@@ -1199,7 +1225,7 @@ impl Grim {
     ///
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
-    /// grim.write_png_to_stdout(&result.data, result.width, result.height)?;
+    /// grim.write_png_to_stdout(result.data(), result.width(), result.height())?;
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
     pub fn write_png_to_stdout(&self, data: &[u8], width: u32, height: u32) -> Result<()> {
@@ -1236,7 +1262,7 @@ impl Grim {
     ///
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
-    /// grim.write_png_to_stdout_with_compression(&result.data, result.width, result.height, 6)?;
+    /// grim.write_png_to_stdout_with_compression(result.data(), result.width(), result.height(), 6)?;
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
     pub fn write_png_to_stdout_with_compression(
@@ -1279,7 +1305,7 @@ impl Grim {
     ///
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
-    /// grim.write_jpeg_to_stdout(&result.data, result.width, result.height)?;
+    /// grim.write_jpeg_to_stdout(result.data(), result.width(), result.height())?;
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
     #[cfg(feature = "jpeg")]
@@ -1312,7 +1338,7 @@ impl Grim {
     ///
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
-    /// grim.write_jpeg_to_stdout_with_quality(&result.data, result.width, result.height, 90)?;
+    /// grim.write_jpeg_to_stdout_with_quality(result.data(), result.width(), result.height(), 90)?;
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
     #[cfg(feature = "jpeg")]
@@ -1355,7 +1381,7 @@ impl Grim {
     ///
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
-    /// grim.write_ppm_to_stdout(&result.data, result.width, result.height)?;
+    /// grim.write_ppm_to_stdout(result.data(), result.width(), result.height())?;
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
     pub fn write_ppm_to_stdout(&self, data: &[u8], width: u32, height: u32) -> Result<()> {

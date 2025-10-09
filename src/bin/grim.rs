@@ -159,29 +159,29 @@ fn main() -> grim_rs::Result<()> {
         match opts.filetype {
             FileType::Png => {
                 if opts.png_level == 6 {
-                    grim.write_png_to_stdout(&result.data, result.width, result.height)?;
+                    grim.write_png_to_stdout(&result.data(), result.width(), result.height())?;
                 } else {
                     grim.write_png_to_stdout_with_compression(
-                        &result.data,
-                        result.width,
-                        result.height,
+                        &result.data(),
+                        result.width(),
+                        result.height(),
                         opts.png_level,
                     )?;
                 }
             }
             FileType::Ppm => {
-                grim.write_ppm_to_stdout(&result.data, result.width, result.height)?;
+                grim.write_ppm_to_stdout(&result.data(), result.width(), result.height())?;
             }
             FileType::Jpeg => {
                 if opts.jpeg_quality == 80 {
                     #[cfg(feature = "jpeg")]
-                    grim.write_jpeg_to_stdout(&result.data, result.width, result.height)?;
+                    grim.write_jpeg_to_stdout(&result.data(), result.width(), result.height())?;
                 } else {
                     #[cfg(feature = "jpeg")]
                     grim.write_jpeg_to_stdout_with_quality(
-                        &result.data,
-                        result.width,
-                        result.height,
+                        &result.data(),
+                        result.width(),
+                        result.height(),
                         opts.jpeg_quality,
                     )?;
                 }
@@ -193,24 +193,24 @@ fn main() -> grim_rs::Result<()> {
         match opts.filetype {
             FileType::Png => {
                 if opts.png_level == 6 {
-                    grim.save_png(&result.data, result.width, result.height, path)?;
+                    grim.save_png(&result.data(), result.width(), result.height(), path)?;
                 } else {
                     grim.save_png_with_compression(
-                        &result.data,
-                        result.width,
-                        result.height,
+                        &result.data(),
+                        result.width(),
+                        result.height(),
                         path,
                         opts.png_level,
                     )?;
                 }
             }
             FileType::Ppm => {
-                grim.save_ppm(&result.data, result.width, result.height, path)?;
+                grim.save_ppm(&result.data(), result.width(), result.height(), path)?;
             }
             FileType::Jpeg => {
                 if opts.jpeg_quality == 80 {
                     #[cfg(feature = "jpeg")]
-                    grim.save_jpeg(&result.data, result.width, result.height, path)?;
+                    grim.save_jpeg(&result.data(), result.width(), result.height(), path)?;
                     #[cfg(not(feature = "jpeg"))]
                     return Err(grim_rs::Error::ImageProcessing(
                         image::ImageError::Unsupported(
@@ -225,9 +225,9 @@ fn main() -> grim_rs::Result<()> {
                 } else {
                     #[cfg(feature = "jpeg")]
                     grim.save_jpeg_with_quality(
-                        &result.data,
-                        result.width,
-                        result.height,
+                        &result.data(),
+                        result.width(),
+                        result.height(),
                         path,
                         opts.jpeg_quality,
                     )?;
