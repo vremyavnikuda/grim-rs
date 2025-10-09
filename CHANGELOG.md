@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **BREAKING: Box struct encapsulation**: Made all fields (`x`, `y`, `width`, `height`) private
+  - Added getter methods: `x()`, `y()`, `width()`, `height()`
+  - Follows Rust API guidelines for proper encapsulation
+  - Migration: Replace direct field access (e.g., `box.x`) with getter calls (e.g., `box.x()`)
+- **BREAKING: CaptureResult struct encapsulation**: Made all fields (`data`, `width`, `height`) private
+  - Added getter methods: `data()` → `&[u8]`, `width()` → `u32`, `height()` → `u32`
+  - Added `into_data(self)` → `Vec<u8>` for ownership transfer without cloning
+  - Added `new(data, width, height)` constructor for creating instances
+  - Migration: Replace direct field access with getters and use constructor for initialization
+- **BREAKING: Output struct encapsulation**: Made all fields (`name`, `geometry`, `scale`, `description`) private
+  - Added getter methods: `name()` → `&str`, `geometry()` → `&Box`, `scale()` → `i32`, `description()` → `Option<&str>`
+  - Follows Rust API guidelines for proper encapsulation
+  - Migration: Replace direct field access (e.g., `output.name`) with getter calls (e.g., `output.name()`)
+- **BREAKING: CaptureParameters struct encapsulation with Builder Pattern**: Made all fields private
+  - Fields: `output_name`, `region`, `overlay_cursor`, `scale`
+  - Added builder pattern: `CaptureParameters::new(name).region(box).overlay_cursor(true).scale(1.5)`
+  - Added getters: `output_name()` → `&str`, `region_ref()` → `Option<&Box>`, `overlay_cursor_enabled()` → `bool`, `scale_factor()` → `Option<f64>`
+  - Migration: Use builder pattern instead of struct literal initialization
+- **BREAKING: MultiOutputCaptureResult struct encapsulation**: Made `outputs` field private
+  - Added methods: `get(name)` → `Option<&CaptureResult>`, `outputs()` → `&HashMap<String, CaptureResult>`, `into_outputs()` → `HashMap<String, CaptureResult>`
+  - Added constructor: `new(outputs)` for creating instances
+  - Migration: Use accessor methods instead of direct field access
+
+### Improved
+- Better API design following Rust conventions (encapsulation, no public fields)
+- More efficient data access with `data()` returning `&[u8]` slice instead of owned `Vec<u8>`
+- Ownership transfer optimization with `into_data()` method
+- Improved error handling: replaced all `.unwrap()` calls in production code with proper error propagation
+  - Created `lock_frame_state()` helper function for safe mutex locking
+  - Uses `?` operator for Result propagation in 12 locations
+  - Uses `.ok().map_or()` pattern in filter closures where `?` is not available
+  - Uses `.expect()` with descriptive messages in event handlers that cannot return Result
+  - Prevents panics from poisoned mutex errors
+
 ## [0.1.2] - 2025-10-04
 
 ### Fixed issues: [#2](https://github.com/vremyavnikuda/grim-rs/issues/2)

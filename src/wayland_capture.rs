@@ -73,6 +73,17 @@ fn get_output_flipped(transform: wayland_client::protocol::wl_output::Transform)
     }
 }
 
+/// Safely lock a FrameState mutex, converting poisoned mutex errors to Result.
+///
+/// This helper function provides proper error handling for mutex locks instead of panicking.
+fn lock_frame_state(
+    frame_state: &Arc<Mutex<FrameState>>,
+) -> Result<std::sync::MutexGuard<FrameState>> {
+    frame_state
+        .lock()
+        .map_err(|e| Error::FrameCapture(format!("Frame state mutex poisoned: {}", e)))
+}
+
 /// Apply transform to captured image data based on rotation and flip.
 ///
 /// This handles basic 90/180/270 degree rotations and horizontal flips.
@@ -490,7 +501,7 @@ impl WaylandCapture {
         let mut attempts = 0;
         loop {
             {
-                let state = frame_state.lock().unwrap();
+                let state = lock_frame_state(&frame_state)?;
                 if state.buffer.is_some() || state.ready {
                     if state.ready && state.buffer.is_none() {
                         return Err(Error::FrameCapture(
@@ -518,7 +529,7 @@ impl WaylandCapture {
             .ok_or_else(|| Error::UnsupportedProtocol("wl_shm not available".to_string()))?;
 
         let (width, height, stride, size, format) = {
-            let state = frame_state.lock().unwrap();
+            let state = lock_frame_state(&frame_state)?;
             if state.width == 0 || state.height == 0 {
                 return Err(Error::CaptureFailed);
             }
@@ -561,7 +572,7 @@ impl WaylandCapture {
         let mut attempts = 0;
         loop {
             {
-                let state = frame_state.lock().unwrap();
+                let state = lock_frame_state(&frame_state)?;
                 if state.ready {
                     if state.buffer.is_none() {
                         return Err(Error::FrameCapture(
@@ -618,7 +629,7 @@ impl WaylandCapture {
         }
 
         let flags = {
-            let state = frame_state.lock().unwrap();
+            let state = lock_frame_state(&frame_state)?;
             state.flags
         };
 
@@ -966,8 +977,10 @@ impl WaylandCapture {
             completed_frames = frame_states
                 .iter()
                 .filter(|(_, state)| {
-                    let s = state.lock().unwrap();
-                    s.buffer.is_some() || s.ready
+                    state
+                        .lock()
+                        .ok()
+                        .map_or(false, |s| (s.buffer.is_some() || s.ready))
                 })
                 .count();
             if completed_frames >= total_frames {
@@ -984,7 +997,7 @@ impl WaylandCapture {
             ));
         }
         for frame_state in frame_states.values() {
-            let state = frame_state.lock().unwrap();
+            let state = lock_frame_state(&frame_state)?;
             if state.buffer.is_none() {
                 return Err(Error::CaptureFailed);
             }
@@ -993,7 +1006,7 @@ impl WaylandCapture {
             HashMap::new();
         for (output_name, frame_state) in &frame_states {
             let (width, height, stride, size) = {
-                let state = frame_state.lock().unwrap();
+                let state = lock_frame_state(&frame_state)?;
                 let width = state.width;
                 let height = state.height;
                 let stride = width * 4;
@@ -1025,7 +1038,7 @@ impl WaylandCapture {
             ))?;
             {
                 let format = {
-                    let state = frame_state.lock().unwrap();
+                    let state = lock_frame_state(&frame_state)?;
                     state.format.unwrap_or(ShmFormat::Xrgb8888)
                 };
                 let pool = shm.create_pool(
@@ -1054,10 +1067,7 @@ impl WaylandCapture {
         while completed_frames < total_frames && attempts < MAX_ATTEMPTS {
             completed_frames = frame_states
                 .iter()
-                .filter(|(_, state)| {
-                    let s = state.lock().unwrap();
-                    s.ready
-                })
+                .filter(|(_, state)| state.lock().ok().map_or(false, |s| s.ready))
                 .count();
             if completed_frames >= total_frames {
                 break;
@@ -1073,7 +1083,7 @@ impl WaylandCapture {
             ));
         }
         for frame_state in frame_states.values() {
-            let state = frame_state.lock().unwrap();
+            let state = lock_frame_state(&frame_state)?;
             if state.ready && state.buffer.is_none() {
                 return Err(Error::FrameCapture(
                     "Frame is ready but buffer was not received".to_string(),
@@ -1084,12 +1094,12 @@ impl WaylandCapture {
         for (output_name, (_tmp_file, mmap)) in buffers {
             let frame_state = &frame_states[&output_name];
             let (width, height) = {
-                let state = frame_state.lock().unwrap();
+                let state = lock_frame_state(&frame_state)?;
                 (state.width, state.height)
             };
             let mut buffer_data = mmap.to_vec();
             if let Some(format) = ({
-                let state = frame_state.lock().unwrap();
+                let state = lock_frame_state(&frame_state)?;
                 state.format
             }) {
                 match format {
@@ -1349,7 +1359,8 @@ impl Dispatch<ZwlrScreencopyFrameV1, Arc<Mutex<FrameState>>> for WaylandCapture 
                 height,
                 stride,
             } => {
-                let mut state = frame_state.lock().unwrap();
+                let mut state = lock_frame_state(&frame_state)
+                    .expect("Frame state mutex poisoned in Buffer event");
                 state.width = width;
                 state.height = height;
                 if let wayland_client::WEnum::Value(val) = format {
@@ -1358,7 +1369,8 @@ impl Dispatch<ZwlrScreencopyFrameV1, Arc<Mutex<FrameState>>> for WaylandCapture 
                 state.buffer = Some(vec![0u8; (stride * height) as usize]);
             }
             Event::Flags { flags } => {
-                let mut state = frame_state.lock().unwrap();
+                let mut state = lock_frame_state(&frame_state)
+                    .expect("Frame state mutex poisoned in Flags event");
                 if let wayland_client::WEnum::Value(val) = flags {
                     state.flags = val.bits();
                     log::debug!("Received flags: {:?} (bits: {})", flags, val.bits());
@@ -1369,12 +1381,14 @@ impl Dispatch<ZwlrScreencopyFrameV1, Arc<Mutex<FrameState>>> for WaylandCapture 
                 tv_sec_lo: _,
                 tv_nsec: _,
             } => {
-                let mut state = frame_state.lock().unwrap();
+                let mut state = lock_frame_state(&frame_state)
+                    .expect("Frame state mutex poisoned in Ready event");
                 state.ready = true;
                 frame.destroy();
             }
             Event::Failed => {
-                let mut state = frame_state.lock().unwrap();
+                let mut state = lock_frame_state(&frame_state)
+                    .expect("Frame state mutex poisoned in Failed event");
                 state.ready = true;
             }
             Event::LinuxDmabuf {
