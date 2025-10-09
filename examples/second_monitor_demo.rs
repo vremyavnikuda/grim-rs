@@ -26,19 +26,19 @@ fn main() -> Result<()> {
     }
 
     for (i, output) in outputs.iter().enumerate() {
-        println!("Output #{}: {}", i + 1, output.name);
+        println!("Output #{}: {}", i + 1, output.name());
         println!(
             "Position: ({}, {})",
-            output.geometry.x(),
-            output.geometry.y()
+            output.geometry().x(),
+            output.geometry().y()
         );
         println!(
             "Size: {}x{}",
-            output.geometry.width(),
-            output.geometry.height()
+            output.geometry().width(),
+            output.geometry().height()
         );
-        println!("Scale: {}x", output.scale);
-        if let Some(ref desc) = output.description {
+        println!("Scale: {}x", output.scale());
+        if let Some(desc) = output.description() {
             println!("Description: {}", desc);
         }
         println!();
@@ -51,15 +51,15 @@ fn main() -> Result<()> {
     }
 
     let second_output = &outputs[1];
-    println!("Using second monitor: {}", second_output.name);
+    println!("Using second monitor: {}", second_output.name());
     println!(
         "Resolution: {}x{}\n",
-        second_output.geometry.width(),
-        second_output.geometry.height()
+        second_output.geometry().width(),
+        second_output.geometry().height()
     );
 
     println!("Capturing full second monitor...");
-    let result = grim.capture_output(&second_output.name)?;
+    let result = grim.capture_output(second_output.name())?;
     println!("Captured: {}x{} pixels", result.width(), result.height());
     let filename = generate_filename("full", "png");
     grim.save_png(&result.data(), result.width(), result.height(), &filename)?;
@@ -68,7 +68,7 @@ fn main() -> Result<()> {
     println!("Capturing second monitor with different scales...");
 
     println!("- At 0.5x scale...");
-    let result_half = grim.capture_output_with_scale(&second_output.name, 0.5)?;
+    let result_half = grim.capture_output_with_scale(second_output.name(), 0.5)?;
     println!(
         "Captured: {}x{} pixels",
         result_half.width(),
@@ -84,7 +84,7 @@ fn main() -> Result<()> {
     println!("Saved: {}\n", filename);
 
     println!("- At 0.25x scale...");
-    let result_quarter = grim.capture_output_with_scale(&second_output.name, 0.25)?;
+    let result_quarter = grim.capture_output_with_scale(second_output.name(), 0.25)?;
     println!(
         "Captured: {}x{} pixels",
         result_quarter.width(),
@@ -101,7 +101,7 @@ fn main() -> Result<()> {
 
     println!("Capturing regions of second monitor...");
 
-    let geom = &second_output.geometry;
+    let geom = second_output.geometry();
 
     println!("- Top-left corner (400x300)...");
     let region = Box::new(
@@ -147,7 +147,7 @@ fn main() -> Result<()> {
     println!("Saved: {}\n", filename);
 
     println!("Saving second monitor in different formats...");
-    let result = grim.capture_output(&second_output.name)?;
+    let result = grim.capture_output(second_output.name())?;
 
     println!("- PNG (default compression)...");
     let filename = generate_filename("format", "png");
@@ -232,7 +232,7 @@ fn main() -> Result<()> {
     grim.save_png(&result.data(), result.width(), result.height(), &filename)?;
     println!("Saved: {}\n", filename);
     println!("Converting to different formats in memory...");
-    let result = grim.capture_output(&second_output.name)?;
+    let result = grim.capture_output(second_output.name())?;
 
     let png_bytes = grim.to_png(&result.data(), result.width(), result.height())?;
     println!("PNG bytes: {} bytes", png_bytes.len());

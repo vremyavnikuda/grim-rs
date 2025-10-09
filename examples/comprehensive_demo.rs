@@ -32,18 +32,18 @@ fn main() -> Result<()> {
     println!("Found {} output(s):\n", outputs.len());
 
     for (i, output) in outputs.iter().enumerate() {
-        println!("Output #{}: {}", i + 1, output.name);
+        println!("Output #{}: {}", i + 1, output.name());
         println!(
             "  Position: ({}, {})",
-            output.geometry.x(),
-            output.geometry.y()
+            output.geometry().x(),
+            output.geometry().y()
         );
         println!(
             "  Size: {}x{}",
-            output.geometry.width(),
-            output.geometry.height()
+            output.geometry().width(),
+            output.geometry().height()
         );
-        println!("  Scale: {}x", output.scale);
+        println!("  Scale: {}x", output.scale());
         println!();
     }
 
@@ -98,7 +98,7 @@ fn main() -> Result<()> {
     )?;
     println!("Saved: {}\n", filename);
 
-    let first_output_name = &outputs[0].name;
+    let first_output_name = outputs[0].name();
     println!("Capturing output: {}", first_output_name);
 
     let output_result = grim.capture_output(first_output_name)?;
@@ -174,13 +174,13 @@ fn main() -> Result<()> {
 
         let params = vec![
             CaptureParameters {
-                output_name: outputs[0].name.clone(),
+                output_name: outputs[0].name().to_string(),
                 region: None,
                 overlay_cursor: false,
                 scale: Some(1.0),
             },
             CaptureParameters {
-                output_name: outputs[1].name.clone(),
+                output_name: outputs[1].name().to_string(),
                 region: None,
                 overlay_cursor: false,
                 scale: Some(0.5),
@@ -319,7 +319,7 @@ fn main() -> Result<()> {
 
     if outputs.len() >= 2 {
         // Create a region that spans across outputs
-        let output1 = &outputs[0].geometry;
+        let output1 = outputs[0].geometry();
 
         // Region from end of first output to start of second
         let span_x = output1.x() + output1.width() - 200;

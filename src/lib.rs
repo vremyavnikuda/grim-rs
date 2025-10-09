@@ -86,13 +86,31 @@ impl CaptureResult {
 #[derive(Debug, Clone)]
 pub struct Output {
     /// Name of the output (e.g., "eDP-1", "HDMI-A-1").
-    pub name: String,
+    name: String,
     /// Geometry of the output (position and size).
-    pub geometry: Box,
+    geometry: Box,
     /// Scale factor of the output (e.g., 1 for normal DPI, 2 for HiDPI).
-    pub scale: i32,
+    scale: i32,
     /// Description of the output (e.g., monitor model, manufacturer info).
-    pub description: Option<String>,
+    description: Option<String>,
+}
+
+impl Output {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn geometry(&self) -> &Box {
+        &self.geometry
+    }
+
+    pub fn scale(&self) -> i32 {
+        self.scale
+    }
+
+    pub fn description(&self) -> Option<&str> {
+        self.description.as_deref()
+    }
 }
 
 /// Parameters for capturing a specific output.
@@ -196,7 +214,7 @@ impl Grim {
     /// let outputs = grim.get_outputs()?;
     ///
     /// for output in outputs {
-    ///     println!("Output: {} ({}x{})", output.name, output.geometry.width(), output.geometry.height());
+    ///     println!("Output: {} ({}x{})", output.name(), output.geometry().width(), output.geometry().height());
     /// }
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
@@ -284,7 +302,7 @@ impl Grim {
     /// // Get available outputs first
     /// let outputs = grim.get_outputs()?;
     /// if let Some(output) = outputs.first() {
-    ///     let result = grim.capture_output(&output.name)?;
+    ///     let result = grim.capture_output(output.name())?;
     ///     println!("Captured output: {}x{}", result.width(), result.height());
     /// }
     /// # Ok::<(), grim_rs::Error>(())
@@ -318,7 +336,7 @@ impl Grim {
     /// // Get available outputs first
     /// let outputs = grim.get_outputs()?;
     /// if let Some(output) = outputs.first() {
-    ///     let result = grim.capture_output_with_scale(&output.name, 0.5)?;
+    ///     let result = grim.capture_output_with_scale(output.name(), 0.5)?;
     ///     println!("Captured output at 50% scale: {}x{}", result.width(), result.height());
     /// }
     /// # Ok::<(), grim_rs::Error>(())
@@ -427,7 +445,7 @@ impl Grim {
     /// // Prepare capture parameters for multiple outputs
     /// let mut parameters = vec![
     ///     CaptureParameters {
-    ///         output_name: outputs[0].name.clone(),
+    ///         output_name: outputs[0].name().to_string(),
     ///         region: None, // Capture entire output
     ///         overlay_cursor: true, // Include cursor
     ///         scale: None, // Use default scale
@@ -438,7 +456,7 @@ impl Grim {
     /// if outputs.len() > 1 {
     ///     let region = Box::new(0, 0, 400, 300);
     ///     parameters.push(CaptureParameters {
-    ///         output_name: outputs[1].name.clone(),
+    ///         output_name: outputs[1].name().to_string(),
     ///         // Capture specific region
     ///         region: Some(region),
     ///         // Exclude cursor

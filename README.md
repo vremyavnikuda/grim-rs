@@ -72,11 +72,11 @@ fn main() -> grim_rs::Result<()> {
     // Get list of available outputs with their properties
     let outputs = grim.get_outputs()?;
     for output in outputs {
-        println!("Output: {}", output.name);
-        println!("  Position: ({}, {})", output.geometry.x, output.geometry.y);
-        println!("  Size: {}x{}", output.geometry.width, output.geometry.height);
-        println!("  Scale: {}", output.scale);
-        if let Some(desc) = &output.description {
+        println!("Output: {}", output.name());
+        println!("  Position: ({}, {})", output.geometry().x(), output.geometry().y());
+        println!("  Size: {}x{}", output.geometry().width(), output.geometry().height());
+        println!("  Scale: {}", output.scale());
+        if let Some(desc) = output.description() {
             println!("  Description: {}", desc);
         }
     }
