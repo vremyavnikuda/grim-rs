@@ -132,15 +132,17 @@ fn main() -> grim_rs::Result<()> {
 
     let result = if let Some(ref output_name) = opts.output_name {
         if opts.with_cursor {
-            let params = vec![CaptureParameters {
-                output_name: output_name.clone(),
-                region: opts.geometry,
-                overlay_cursor: opts.with_cursor,
-                scale: opts.scale,
-            }];
+            let mut params =
+                CaptureParameters::new(output_name.clone()).overlay_cursor(opts.with_cursor);
+            if let Some(region) = opts.geometry {
+                params = params.region(region);
+            }
+            if let Some(scale) = opts.scale {
+                params = params.scale(scale);
+            }
             let multi_result =
-                grim.capture_outputs_with_scale(params, opts.scale.unwrap_or(1.0))?;
-            if let Some(capture_result) = multi_result.outputs.get(output_name) {
+                grim.capture_outputs_with_scale(vec![params], opts.scale.unwrap_or(1.0))?;
+            if let Some(capture_result) = multi_result.get(output_name) {
                 capture_result.clone()
             } else {
                 return Err(grim_rs::Error::OutputNotFound(output_name.clone()));

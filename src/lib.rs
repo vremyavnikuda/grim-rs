@@ -123,7 +123,7 @@ pub struct CaptureParameters {
     /// Name of the output to capture.
     ///
     /// Must match one of the names returned by [`Grim::get_outputs`].
-    pub output_name: String,
+    output_name: String,
     /// Optional region within the output to capture.
     ///
     /// If `None`, the entire output will be captured.
@@ -131,19 +131,71 @@ pub struct CaptureParameters {
     /// If `Some(region)`, only the specified region will be captured.
     ///
     /// The region must be within the bounds of the output.
-    pub region: Option<Box>,
+    region: Option<Box>,
     /// Whether to include the cursor in the capture.
     ///
     /// If `true`, the cursor will be included in the screenshot.
     ///
     /// If `false`, the cursor will be excluded from the screenshot.
-    pub overlay_cursor: bool,
+    overlay_cursor: bool,
     /// Scale factor for the output image.
     ///
     /// If `None`, uses the default scale (typically the highest output scale).
     ///
     /// If `Some(scale)`, the output image will be scaled accordingly.
-    pub scale: Option<f64>,
+    scale: Option<f64>,
+}
+
+impl CaptureParameters {
+    /// Creates a new CaptureParameters with the specified output name.
+    ///
+    /// By default, captures the entire output without cursor and with default scale.
+    pub fn new(output_name: impl Into<String>) -> Self {
+        Self {
+            output_name: output_name.into(),
+            region: None,
+            overlay_cursor: false,
+            scale: None,
+        }
+    }
+
+    /// Sets the region to capture within the output.
+    pub fn region(mut self, region: Box) -> Self {
+        self.region = Some(region);
+        self
+    }
+
+    /// Sets whether to include the cursor in the capture.
+    pub fn overlay_cursor(mut self, overlay_cursor: bool) -> Self {
+        self.overlay_cursor = overlay_cursor;
+        self
+    }
+
+    /// Sets the scale factor for the output image.
+    pub fn scale(mut self, scale: f64) -> Self {
+        self.scale = Some(scale);
+        self
+    }
+
+    /// Returns the output name.
+    pub fn output_name(&self) -> &str {
+        &self.output_name
+    }
+
+    /// Returns the region, if set.
+    pub fn region_ref(&self) -> Option<&Box> {
+        self.region.as_ref()
+    }
+
+    /// Returns whether cursor overlay is enabled.
+    pub fn overlay_cursor_enabled(&self) -> bool {
+        self.overlay_cursor
+    }
+
+    /// Returns the scale factor, if set.
+    pub fn scale_factor(&self) -> Option<f64> {
+        self.scale
+    }
 }
 
 /// Result of capturing multiple outputs.
@@ -155,7 +207,29 @@ pub struct MultiOutputCaptureResult {
     ///
     /// The keys are output names, and the values are the corresponding
     /// capture results for each output.
-    pub outputs: std::collections::HashMap<String, CaptureResult>,
+    outputs: std::collections::HashMap<String, CaptureResult>,
+}
+
+impl MultiOutputCaptureResult {
+    /// Creates a new MultiOutputCaptureResult with the given outputs map.
+    pub fn new(outputs: std::collections::HashMap<String, CaptureResult>) -> Self {
+        Self { outputs }
+    }
+
+    /// Gets the capture result for the specified output name.
+    pub fn get(&self, output_name: &str) -> Option<&CaptureResult> {
+        self.outputs.get(output_name)
+    }
+
+    /// Returns a reference to the outputs map.
+    pub fn outputs(&self) -> &std::collections::HashMap<String, CaptureResult> {
+        &self.outputs
+    }
+
+    /// Consumes self and returns the outputs map.
+    pub fn into_outputs(self) -> std::collections::HashMap<String, CaptureResult> {
+        self.outputs
+    }
 }
 
 /// Main interface for taking screenshots.
@@ -444,31 +518,22 @@ impl Grim {
     ///
     /// // Prepare capture parameters for multiple outputs
     /// let mut parameters = vec![
-    ///     CaptureParameters {
-    ///         output_name: outputs[0].name().to_string(),
-    ///         region: None, // Capture entire output
-    ///         overlay_cursor: true, // Include cursor
-    ///         scale: None, // Use default scale
-    ///     }
+    ///     CaptureParameters::new(outputs[0].name())
+    ///         .overlay_cursor(true)
     /// ];
     ///
     /// // If we have a second output, capture a region of it
     /// if outputs.len() > 1 {
     ///     let region = Box::new(0, 0, 400, 300);
-    ///     parameters.push(CaptureParameters {
-    ///         output_name: outputs[1].name().to_string(),
-    ///         // Capture specific region
-    ///         region: Some(region),
-    ///         // Exclude cursor
-    ///         overlay_cursor: false,
-    ///         // Use default scale
-    ///         scale: None,
-    ///     });
+    ///     parameters.push(
+    ///         CaptureParameters::new(outputs[1].name())
+    ///             .region(region)
+    ///     );
     /// }
     ///
     /// // Capture all specified outputs
     /// let results = grim.capture_outputs(parameters)?;
-    /// println!("Captured {} outputs", results.outputs.len());
+    /// println!("Captured {} outputs", results.outputs().len());
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
     pub fn capture_outputs(

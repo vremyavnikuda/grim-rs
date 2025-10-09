@@ -173,24 +173,14 @@ fn main() -> Result<()> {
         println!("Capturing Multiple Outputs with Different Parameters");
 
         let params = vec![
-            CaptureParameters {
-                output_name: outputs[0].name().to_string(),
-                region: None,
-                overlay_cursor: false,
-                scale: Some(1.0),
-            },
-            CaptureParameters {
-                output_name: outputs[1].name().to_string(),
-                region: None,
-                overlay_cursor: false,
-                scale: Some(0.5),
-            },
+            CaptureParameters::new(outputs[0].name()).scale(1.0),
+            CaptureParameters::new(outputs[1].name()).scale(0.5),
         ];
 
         let multi_result = grim.capture_outputs(params)?;
-        println!("Captured {} outputs", multi_result.outputs.len());
+        println!("Captured {} outputs", multi_result.outputs().len());
 
-        for (_output_name, capture) in multi_result.outputs.iter() {
+        for (_output_name, capture) in multi_result.outputs().iter() {
             let filename = generate_demo_filename("png");
             grim.save_png(
                 &capture.data(),

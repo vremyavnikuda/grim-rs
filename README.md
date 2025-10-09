@@ -120,24 +120,17 @@ fn main() -> grim_rs::Result<()> {
     
     // Capture multiple outputs with different parameters
     let parameters = vec![
-        CaptureParameters {
-            output_name: "DP-1".to_string(),
-            region: None,                // Capture entire output
-            overlay_cursor: true,        // Include cursor
-            scale: None,                 // Use default scale
-        },
-        CaptureParameters {
-            output_name: "HDMI-A-1".to_string(),
-            region: Some(Box::new(0, 0, 1920, 1080)), // Capture specific region
-            overlay_cursor: false,       // Exclude cursor
-            scale: Some(0.5),            // Scale to 50%
-        }
+        CaptureParameters::new("DP-1")
+            .overlay_cursor(true),
+        CaptureParameters::new("HDMI-A-1")
+            .region(Box::new(0, 0, 1920, 1080))
+            .scale(0.5)
     ];
     
     let results = grim.capture_outputs(parameters)?;
-    for (output_name, capture_result) in results.outputs {
+    for (output_name, capture_result) in results.into_outputs() {
         let filename = format!("{}.png", output_name);
-        grim.save_png(&capture_result.data, capture_result.width, capture_result.height, &filename)?;
+        grim.save_png(&capture_result.data(), capture_result.width(), capture_result.height(), &filename)?;
     }
     
     Ok(())

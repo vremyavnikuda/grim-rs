@@ -66,17 +66,15 @@ fn test_capture_result_struct() {
 
 #[test]
 fn test_capture_parameters_struct() {
-    let params = CaptureParameters {
-        output_name: "eDP-1".to_string(),
-        region: Some(GrimBox::new(0, 0, 800, 600)),
-        overlay_cursor: true,
-        scale: Some(1.5),
-    };
+    let params = CaptureParameters::new("eDP-1")
+        .region(GrimBox::new(0, 0, 800, 600))
+        .overlay_cursor(true)
+        .scale(1.5);
 
-    assert_eq!(params.output_name, "eDP-1");
-    assert_eq!(params.region, Some(GrimBox::new(0, 0, 800, 600)));
-    assert!(params.overlay_cursor);
-    assert_eq!(params.scale, Some(1.5));
+    assert_eq!(params.output_name(), "eDP-1");
+    assert_eq!(params.region_ref(), Some(&GrimBox::new(0, 0, 800, 600)));
+    assert!(params.overlay_cursor_enabled());
+    assert_eq!(params.scale_factor(), Some(1.5));
 }
 
 #[test]
@@ -94,12 +92,7 @@ fn test_error_messages() {
 #[test]
 fn test_crate_export_structs() {
     let _box = GrimBox::new(0, 0, 100, 100);
-    let _params = CaptureParameters {
-        output_name: "test".to_string(),
-        region: None,
-        overlay_cursor: false,
-        scale: None,
-    };
+    let _params = CaptureParameters::new("test");
     let _result = CaptureResult::new(vec![], 0, 0);
 }
 
@@ -162,17 +155,12 @@ fn test_ppm_format_generation() {
 
 #[test]
 fn test_capture_parameters_default_behavior() {
-    let params = CaptureParameters {
-        output_name: "test".to_string(),
-        region: None,
-        overlay_cursor: false,
-        scale: None,
-    };
+    let params = CaptureParameters::new("test");
 
-    assert_eq!(params.output_name, "test");
-    assert!(params.region.is_none());
-    assert!(!params.overlay_cursor);
-    assert!(params.scale.is_none());
+    assert_eq!(params.output_name(), "test");
+    assert!(params.region_ref().is_none());
+    assert!(!params.overlay_cursor_enabled());
+    assert!(params.scale_factor().is_none());
 }
 
 #[cfg(feature = "jpeg")]
@@ -218,15 +206,13 @@ fn test_multi_output_capture_result() {
         CaptureResult::new(vec![128u8; 200 * 150 * 4], 200, 150),
     );
 
-    let multi_result = grim_rs::MultiOutputCaptureResult {
-        outputs: outputs_map,
-    };
+    let multi_result = grim_rs::MultiOutputCaptureResult::new(outputs_map);
 
-    assert_eq!(multi_result.outputs.len(), 2);
-    assert!(multi_result.outputs.contains_key("output1"));
-    assert!(multi_result.outputs.contains_key("output2"));
+    assert_eq!(multi_result.outputs().len(), 2);
+    assert!(multi_result.outputs().contains_key("output1"));
+    assert!(multi_result.outputs().contains_key("output2"));
 
-    let output1_result = multi_result.outputs.get("output1").unwrap();
+    let output1_result = multi_result.get("output1").unwrap();
     assert_eq!(output1_result.width(), 100);
     assert_eq!(output1_result.height(), 100);
     assert_eq!(output1_result.data().len(), 100 * 100 * 4);

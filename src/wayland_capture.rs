@@ -914,10 +914,10 @@ impl WaylandCapture {
                 .globals
                 .output_info
                 .iter()
-                .find(|(_, info)| info.name == param.output_name)
+                .find(|(_, info)| info.name == param.output_name())
                 .map(|(_, info)| info)
-                .ok_or_else(|| Error::OutputNotFound(param.output_name.clone()))?;
-            let region = if let Some(region) = param.region {
+                .ok_or_else(|| Error::OutputNotFound(param.output_name().to_string()))?;
+            let region = if let Some(region) = param.region_ref() {
                 let output_right = output_info.x + output_info.width;
                 let output_bottom = output_info.y + output_info.height;
                 if region.x() < output_info.x
@@ -929,7 +929,7 @@ impl WaylandCapture {
                         "Capture region extends outside output boundaries".to_string(),
                     ));
                 }
-                region
+                *region
             } else {
                 Box::new(
                     output_info.x,
@@ -947,7 +947,7 @@ impl WaylandCapture {
                 flags: 0,
             }));
             let frame = screencopy_manager.capture_output_region(
-                if param.overlay_cursor { 1 } else { 0 },
+                if param.overlay_cursor_enabled() { 1 } else { 0 },
                 output,
                 region.x(),
                 region.y(),
@@ -956,8 +956,8 @@ impl WaylandCapture {
                 &qh,
                 frame_state.clone(),
             );
-            frame_states.insert(param.output_name.clone(), frame_state);
-            frames.insert(param.output_name.clone(), frame);
+            frame_states.insert(param.output_name().to_string(), frame_state);
+            frames.insert(param.output_name().to_string(), frame);
         }
         let mut attempts = 0;
         let mut completed_frames = 0;
@@ -1117,7 +1117,7 @@ impl WaylandCapture {
                 },
             );
         }
-        Ok(MultiOutputCaptureResult { outputs: results })
+        Ok(MultiOutputCaptureResult::new(results))
     }
 
     pub fn capture_outputs_with_scale(
@@ -1128,15 +1128,13 @@ impl WaylandCapture {
         let result = self.capture_outputs(parameters)?;
         let mut scaled_results = std::collections::HashMap::new();
 
-        for (output_name, capture_result) in result.outputs {
+        for (output_name, capture_result) in result.into_outputs() {
             let scale = default_scale;
             let scaled_result = self.scale_image_data(capture_result, scale)?;
             scaled_results.insert(output_name, scaled_result);
         }
 
-        Ok(MultiOutputCaptureResult {
-            outputs: scaled_results,
-        })
+        Ok(MultiOutputCaptureResult::new(scaled_results))
     }
 }
 
