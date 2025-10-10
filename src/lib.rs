@@ -1478,12 +1478,6 @@ impl Grim {
     }
 }
 
-impl Default for Grim {
-    fn default() -> Self {
-        Self::new().expect("Failed to initialize Grim")
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
