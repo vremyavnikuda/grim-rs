@@ -46,33 +46,6 @@ fn apply_output_transform(
     }
 }
 
-/// Get rotation angle in radians for the given transform.
-fn get_output_rotation(transform: wayland_client::protocol::wl_output::Transform) -> f64 {
-    use wayland_client::protocol::wl_output::Transform;
-
-    match transform {
-        Transform::_90 | Transform::Flipped90 => std::f64::consts::FRAC_PI_2,
-        Transform::_180 | Transform::Flipped180 => std::f64::consts::PI,
-        Transform::_270 | Transform::Flipped270 => 3.0 * std::f64::consts::FRAC_PI_2,
-        _ => 0.0,
-    }
-}
-
-/// Get flip multiplier for the given transform.
-///
-/// Returns -1 if flipped, 1 otherwise.
-fn get_output_flipped(transform: wayland_client::protocol::wl_output::Transform) -> i32 {
-    use wayland_client::protocol::wl_output::Transform;
-
-    match transform {
-        Transform::Flipped
-        | Transform::Flipped90
-        | Transform::Flipped180
-        | Transform::Flipped270 => -1,
-        _ => 1,
-    }
-}
-
 /// Safely lock a FrameState mutex, converting poisoned mutex errors to Result.
 ///
 /// This helper function provides proper error handling for mutex locks instead of panicking.
@@ -282,57 +255,6 @@ fn blit_capture(
 }
 
 /// Check if outputs have overlapping regions.
-///
-/// Returns true if any two outputs overlap.
-fn check_outputs_overlap(outputs: &[(WlOutput, OutputInfo)]) -> bool {
-    for i in 0..outputs.len() {
-        let box1 = Box::new(
-            outputs[i].1.logical_x,
-            outputs[i].1.logical_y,
-            outputs[i].1.logical_width,
-            outputs[i].1.logical_height,
-        );
-
-        for j in i + 1..outputs.len() {
-            let box2 = Box::new(
-                outputs[j].1.logical_x,
-                outputs[j].1.logical_y,
-                outputs[j].1.logical_width,
-                outputs[j].1.logical_height,
-            );
-
-            if box1.intersects(&box2) {
-                return true;
-            }
-        }
-    }
-
-    false
-}
-
-/// Check if the layout is grid-aligned (outputs are pixel-aligned and don't overlap).
-///
-/// Grid-aligned layouts can use faster SRC compositing instead of OVER.
-fn is_grid_aligned(region: &Box, outputs: &[(WlOutput, OutputInfo)]) -> bool {
-    if check_outputs_overlap(outputs) {
-        return false;
-    }
-
-    for (_, info) in outputs {
-        let output_box = Box::new(
-            info.logical_x,
-            info.logical_y,
-            info.logical_width,
-            info.logical_height,
-        );
-        if output_box.intersects(region) {
-            continue;
-        }
-    }
-
-    true
-}
-
 #[derive(Clone)]
 struct OutputInfo {
     name: String,
@@ -665,8 +587,6 @@ impl WaylandCapture {
         let mut dest = vec![0u8; dest_width * dest_height * 4];
         let mut any_capture = false;
 
-        let _grid_aligned = is_grid_aligned(&region, outputs);
-
         for (output, info) in outputs {
             let output_box = Box::new(
                 info.logical_x,
@@ -800,10 +720,6 @@ impl WaylandCapture {
             max_x = max_x.max(info.logical_x + info.logical_width);
             max_y = max_y.max(info.logical_y + info.logical_height);
         }
-
-        let scaled_width = (((max_x - min_x) as f64) * scale) as i32;
-        let scaled_height = (((max_y - min_y) as f64) * scale) as i32;
-        let _scaled_region = Box::new(min_x, min_y, scaled_width, scaled_height);
 
         let original_result = self.composite_region(
             Box::new(min_x, min_y, max_x - min_x, max_y - min_y),
