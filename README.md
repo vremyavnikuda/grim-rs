@@ -3,6 +3,9 @@
 
 Rust implementation of `grim-rs` screenshot utility for Wayland compositors.
 
+> **⚠️ Breaking Changes in v0.1.3**  
+> Version 0.1.3 introduces breaking changes related to struct field encapsulation. See [MIGRATION.md](MIGRATION.md) for upgrade guide.
+
 ## Features
 
 - **Pure Rust implementation** - no external dependencies on C libraries
@@ -33,8 +36,10 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-grim-rs = "0.1.1"
+grim-rs = "0.1.3"
 ```
+
+**Upgrading from 0.1.2?** See [MIGRATION.md](MIGRATION.md) for breaking changes.
 
 ### Basic Capture Operations
 
@@ -45,17 +50,17 @@ fn main() -> grim_rs::Result<()> {
     let mut grim = Grim::new()?;
     
     // Capture entire screen (all outputs)
-    let data = grim.capture_all()?;
-    grim.save_png(&data.data, data.width, data.height, "screenshot.png")?;
+    let result = grim.capture_all()?;
+    grim.save_png(result.data(), result.width(), result.height(), "screenshot.png")?;
     
     // Capture specific region (automatically composites across monitors)
     let region = Box::new(100, 100, 800, 600);
-    let data = grim.capture_region(region)?;
-    grim.save_png(&data.data, data.width, data.height, "region.png")?;
+    let result = grim.capture_region(region)?;
+    grim.save_png(result.data(), result.width(), result.height(), "region.png")?;
     
     // Capture specific output by name (handles transforms/rotation automatically)
-    let data = grim.capture_output("DP-1")?;
-    grim.save_png(&data.data, data.width, data.height, "output.png")?;
+    let result = grim.capture_output("DP-1")?;
+    grim.save_png(result.data(), result.width(), result.height(), "output.png")?;
     
     Ok(())
 }
@@ -94,17 +99,17 @@ fn main() -> grim_rs::Result<()> {
     let mut grim = Grim::new()?;
     
     // Capture entire screen with scaling (high-quality downscaling)
-    let data = grim.capture_all_with_scale(0.5)?; // 50% size, uses Lanczos3 filter
-    grim.save_png(&data.data, data.width, data.height, "thumbnail.png")?;
+    let result = grim.capture_all_with_scale(0.5)?; // 50% size, uses Lanczos3 filter
+    grim.save_png(result.data(), result.width(), result.height(), "thumbnail.png")?;
     
     // Capture region with scaling
     let region = Box::new(0, 0, 1920, 1080);
-    let data = grim.capture_region_with_scale(region, 0.8)?; // 80% size, uses Triangle filter
-    grim.save_png(&data.data, data.width, data.height, "scaled.png")?;
+    let result = grim.capture_region_with_scale(region, 0.8)?; // 80% size, uses Triangle filter
+    grim.save_png(result.data(), result.width(), result.height(), "scaled.png")?;
     
     // Capture specific output with scaling
-    let data = grim.capture_output_with_scale("DP-1", 0.5)?;
-    grim.save_png(&data.data, data.width, data.height, "output_scaled.png")?;
+    let result = grim.capture_output_with_scale("DP-1", 0.5)?;
+    grim.save_png(result.data(), result.width(), result.height(), "output_scaled.png")?;
     
     Ok(())
 }
@@ -128,9 +133,9 @@ fn main() -> grim_rs::Result<()> {
     ];
     
     let results = grim.capture_outputs(parameters)?;
-    for (output_name, capture_result) in results.into_outputs() {
+    for (output_name, result) in results.into_outputs() {
         let filename = format!("{}.png", output_name);
-        grim.save_png(&capture_result.data(), capture_result.width(), capture_result.height(), &filename)?;
+        grim.save_png(result.data(), result.width(), result.height(), &filename)?;
     }
     
     Ok(())
@@ -144,22 +149,22 @@ use grim_rs::Grim;
 
 fn main() -> grim_rs::Result<()> {
     let mut grim = Grim::new()?;
-    let data = grim.capture_all()?;
+    let result = grim.capture_all()?;
     
     // Save as PNG with default compression (level 6)
-    grim.save_png(&data.data, data.width, data.height, "screenshot.png")?;
+    grim.save_png(result.data(), result.width(), result.height(), "screenshot.png")?;
     
     // Save as PNG with custom compression (0-9, where 9 is highest)
-    grim.save_png_with_compression(&data.data, data.width, data.height, "compressed.png", 9)?;
+    grim.save_png_with_compression(result.data(), result.width(), result.height(), "compressed.png", 9)?;
     
     // Save as JPEG with default quality (80)
-    grim.save_jpeg(&data.data, data.width, data.height, "screenshot.jpg")?;
+    grim.save_jpeg(result.data(), result.width(), result.height(), "screenshot.jpg")?;
     
     // Save as JPEG with custom quality (0-100, where 100 is highest)
-    grim.save_jpeg_with_quality(&data.data, data.width, data.height, "quality.jpg", 95)?;
+    grim.save_jpeg_with_quality(result.data(), result.width(), result.height(), "quality.jpg", 95)?;
     
     // Save as PPM (uncompressed)
-    grim.save_ppm(&data.data, data.width, data.height, "screenshot.ppm")?;
+    grim.save_ppm(result.data(), result.width(), result.height(), "screenshot.ppm")?;
     
     Ok(())
 }
@@ -172,24 +177,24 @@ use grim_rs::Grim;
 
 fn main() -> grim_rs::Result<()> {
     let mut grim = Grim::new()?;
-    let data = grim.capture_all()?;
+    let result = grim.capture_all()?;
     
     // Convert to PNG bytes
-    let png_bytes = grim.to_png(&data.data, data.width, data.height)?;
+    let png_bytes = grim.to_png(result.data(), result.width(), result.height())?;
     println!("PNG size: {} bytes", png_bytes.len());
     
     // Convert to PNG bytes with custom compression
-    let png_bytes = grim.to_png_with_compression(&data.data, data.width, data.height, 9)?;
+    let png_bytes = grim.to_png_with_compression(result.data(), result.width(), result.height(), 9)?;
     
     // Convert to JPEG bytes
-    let jpeg_bytes = grim.to_jpeg(&data.data, data.width, data.height)?;
+    let jpeg_bytes = grim.to_jpeg(result.data(), result.width(), result.height())?;
     println!("JPEG size: {} bytes", jpeg_bytes.len());
     
     // Convert to JPEG bytes with custom quality
-    let jpeg_bytes = grim.to_jpeg_with_quality(&data.data, data.width, data.height, 85)?;
+    let jpeg_bytes = grim.to_jpeg_with_quality(result.data(), result.width(), result.height(), 85)?;
     
     // Convert to PPM bytes
-    let ppm_bytes = grim.to_ppm(&data.data, data.width, data.height)?;
+    let ppm_bytes = grim.to_ppm(result.data(), result.width(), result.height())?;
     println!("PPM size: {} bytes", ppm_bytes.len());
     
     Ok(())
@@ -203,22 +208,22 @@ use grim_rs::Grim;
 
 fn main() -> grim_rs::Result<()> {
     let mut grim = Grim::new()?;
-    let data = grim.capture_all()?;
+    let result = grim.capture_all()?;
     
     // Write PNG to stdout
-    grim.write_png_to_stdout(&data.data, data.width, data.height)?;
+    grim.write_png_to_stdout(result.data(), result.width(), result.height())?;
     
     // Write PNG to stdout with custom compression
-    grim.write_png_to_stdout_with_compression(&data.data, data.width, data.height, 6)?;
+    grim.write_png_to_stdout_with_compression(result.data(), result.width(), result.height(), 6)?;
     
     // Write JPEG to stdout
-    grim.write_jpeg_to_stdout(&data.data, data.width, data.height)?;
+    grim.write_jpeg_to_stdout(result.data(), result.width(), result.height())?;
     
     // Write JPEG to stdout with custom quality
-    grim.write_jpeg_to_stdout_with_quality(&data.data, data.width, data.height, 90)?;
+    grim.write_jpeg_to_stdout_with_quality(result.data(), result.width(), result.height(), 90)?;
     
     // Write PPM to stdout
-    grim.write_ppm_to_stdout(&data.data, data.width, data.height)?;
+    grim.write_ppm_to_stdout(result.data(), result.width(), result.height())?;
     
     Ok(())
 }
@@ -235,8 +240,8 @@ fn main() -> grim_rs::Result<()> {
     // Read region specification from stdin (format: "x,y widthxheight")
     let region = Grim::read_region_from_stdin()?;
     
-    let data = grim.capture_region(region)?;
-    grim.save_png(&data.data, data.width, data.height, "region.png")?;
+    let result = grim.capture_region(region)?;
+    grim.save_png(result.data(), result.width(), result.height(), "region.png")?;
     
     Ok(())
 }

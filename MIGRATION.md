@@ -71,6 +71,41 @@ impl Box {
 }
 ```
 
+### Practical Examples
+
+**Working with geometry calculations:**
+```rust
+use grim_rs::geometry::Box;
+
+let region = Box::new(100, 200, 800, 600);
+
+// Calculate center point
+let center_x = region.x() + region.width() / 2;
+let center_y = region.y() + region.height() / 2;
+println!("Center: ({}, {})", center_x, center_y);
+
+// Check if region is valid
+if region.width() > 0 && region.height() > 0 {
+    println!("Valid region: {}x{}", region.width(), region.height());
+}
+
+// Calculate area
+let area = region.width() * region.height();
+println!("Area: {} pixels", area);
+```
+
+**Using intersection:**
+```rust
+let screen = Box::new(0, 0, 1920, 1080);
+let window = Box::new(100, 100, 800, 600);
+
+if let Some(visible_area) = screen.intersection(&window) {
+    println!("Visible window area: {}x{} at ({}, {})",
+        visible_area.width(), visible_area.height(),
+        visible_area.x(), visible_area.y());
+}
+```
+
 ---
 
 ## 2. CaptureResult Struct Encapsulation
@@ -133,6 +168,45 @@ impl CaptureResult {
 
 - **More efficient**: `data()` returns `&[u8]` instead of cloning
 - **Ownership transfer**: `into_data()` moves data without copying
+
+### Practical Examples
+
+**Processing captured data:**
+```rust
+use grim_rs::Grim;
+
+let mut grim = Grim::new()?;
+let result = grim.capture_all()?;
+
+// Efficient borrowing - no cloning needed
+let pixels = result.data();
+println!("Captured {} bytes", pixels.len());
+
+// Process without cloning
+for chunk in result.data().chunks_exact(4) {
+    let (r, g, b, a) = (chunk[0], chunk[1], chunk[2], chunk[3]);
+    // Process pixel...
+}
+
+// Save multiple formats from same capture
+grim.save_png(result.data(), result.width(), result.height(), "capture.png")?;
+grim.save_ppm(result.data(), result.width(), result.height(), "capture.ppm")?;
+```
+
+**Taking ownership when needed:**
+```rust
+let result = grim.capture_all()?;
+
+// Move data out of CaptureResult
+let (width, height) = (result.width(), result.height());
+let owned_data = result.into_data(); // Consumes result
+
+// Now you own the data and can modify it
+let mut pixel_data = owned_data;
+for chunk in pixel_data.chunks_exact_mut(4) {
+    chunk[3] = 255; // Set alpha to fully opaque
+}
+```
 
 ---
 
