@@ -2,15 +2,36 @@ use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Box {
-    pub x: i32,
-    pub y: i32,
-    pub width: i32,
-    pub height: i32,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
 }
 
 impl Box {
     pub fn new(x: i32, y: i32, width: i32, height: i32) -> Self {
-        Self { x, y, width, height }
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
+    }
+
+    pub fn x(&self) -> i32 {
+        self.x
+    }
+
+    pub fn y(&self) -> i32 {
+        self.y
+    }
+
+    pub fn width(&self) -> i32 {
+        self.width
+    }
+
+    pub fn height(&self) -> i32 {
+        self.height
     }
 
     pub fn is_empty(&self) -> bool {
@@ -61,15 +82,23 @@ impl std::str::FromStr for Box {
 
         let xy: Vec<&str> = parts[0].split(',').collect();
         let wh: Vec<&str> = parts[1].split('x').collect();
-        
+
         if xy.len() != 2 || wh.len() != 2 {
             return Err(crate::Error::InvalidGeometry(s.to_string()));
         }
 
-        let x = xy[0].parse().map_err(|_| crate::Error::InvalidGeometry(s.to_string()))?;
-        let y = xy[1].parse().map_err(|_| crate::Error::InvalidGeometry(s.to_string()))?;
-        let width = wh[0].parse().map_err(|_| crate::Error::InvalidGeometry(s.to_string()))?;
-        let height = wh[1].parse().map_err(|_| crate::Error::InvalidGeometry(s.to_string()))?;
+        let x = xy[0]
+            .parse()
+            .map_err(|_| crate::Error::InvalidGeometry(s.to_string()))?;
+        let y = xy[1]
+            .parse()
+            .map_err(|_| crate::Error::InvalidGeometry(s.to_string()))?;
+        let width = wh[0]
+            .parse()
+            .map_err(|_| crate::Error::InvalidGeometry(s.to_string()))?;
+        let height = wh[1]
+            .parse()
+            .map_err(|_| crate::Error::InvalidGeometry(s.to_string()))?;
 
         Ok(Box::new(x, y, width, height))
     }
@@ -83,23 +112,23 @@ mod tests {
     fn test_box_parsing() {
         let box_str = "10,20 300x400";
         let parsed: Box = box_str.parse().unwrap();
-        assert_eq!(parsed.x, 10);
-        assert_eq!(parsed.y, 20);
-        assert_eq!(parsed.width, 300);
-        assert_eq!(parsed.height, 400);
+        assert_eq!(parsed.x(), 10);
+        assert_eq!(parsed.y(), 20);
+        assert_eq!(parsed.width(), 300);
+        assert_eq!(parsed.height(), 400);
     }
 
     #[test]
     fn test_box_intersection() {
         let box1 = Box::new(0, 0, 100, 100);
         let box2 = Box::new(50, 50, 100, 100);
-        
+
         assert!(box1.intersects(&box2));
-        
+
         let intersection = box1.intersection(&box2).unwrap();
-        assert_eq!(intersection.x, 50);
-        assert_eq!(intersection.y, 50);
-        assert_eq!(intersection.width, 50);
-        assert_eq!(intersection.height, 50);
+        assert_eq!(intersection.x(), 50);
+        assert_eq!(intersection.y(), 50);
+        assert_eq!(intersection.width(), 50);
+        assert_eq!(intersection.height(), 50);
     }
 }

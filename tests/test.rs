@@ -1,13 +1,13 @@
-use grim_rs::{ Grim, Box as GrimBox, CaptureParameters, CaptureResult };
+use grim_rs::{Box as GrimBox, CaptureParameters, CaptureResult, Grim};
 use std::collections::HashMap;
 
 #[test]
 fn test_box_struct_creation() {
     let box1 = GrimBox::new(10, 20, 100, 200);
-    assert_eq!(box1.x, 10);
-    assert_eq!(box1.y, 20);
-    assert_eq!(box1.width, 100);
-    assert_eq!(box1.height, 200);
+    assert_eq!(box1.x(), 10);
+    assert_eq!(box1.y(), 20);
+    assert_eq!(box1.width(), 100);
+    assert_eq!(box1.height(), 200);
 }
 
 #[test]
@@ -32,10 +32,10 @@ fn test_box_intersection() {
 
     assert!(box1.intersects(&box2));
     let intersection = box1.intersection(&box2).unwrap();
-    assert_eq!(intersection.x, 50);
-    assert_eq!(intersection.y, 50);
-    assert_eq!(intersection.width, 50);
-    assert_eq!(intersection.height, 50);
+    assert_eq!(intersection.x(), 50);
+    assert_eq!(intersection.y(), 50);
+    assert_eq!(intersection.width(), 50);
+    assert_eq!(intersection.height(), 50);
 
     let box3 = GrimBox::new(0, 0, 10, 10);
     let box4 = GrimBox::new(100, 100, 10, 10);
@@ -47,40 +47,34 @@ fn test_box_intersection() {
 fn test_box_string_parsing() {
     let box_str = "10,20 300x400";
     let parsed: GrimBox = box_str.parse().unwrap();
-    assert_eq!(parsed.x, 10);
-    assert_eq!(parsed.y, 20);
-    assert_eq!(parsed.width, 300);
-    assert_eq!(parsed.height, 400);
+    assert_eq!(parsed.x(), 10);
+    assert_eq!(parsed.y(), 20);
+    assert_eq!(parsed.width(), 300);
+    assert_eq!(parsed.height(), 400);
     assert_eq!(parsed.to_string(), "10,20 300x400");
 }
 
 #[test]
 fn test_capture_result_struct() {
     let data = vec![255u8; 400];
-    let result = CaptureResult {
-        data,
-        width: 10,
-        height: 10,
-    };
+    let result = CaptureResult::new(data, 10, 10);
 
-    assert_eq!(result.width, 10);
-    assert_eq!(result.height, 10);
-    assert_eq!(result.data.len(), 400); // 10x10x4
+    assert_eq!(result.width(), 10);
+    assert_eq!(result.height(), 10);
+    assert_eq!(result.data().len(), 400); // 10x10x4
 }
 
 #[test]
 fn test_capture_parameters_struct() {
-    let params = CaptureParameters {
-        output_name: "eDP-1".to_string(),
-        region: Some(GrimBox::new(0, 0, 800, 600)),
-        overlay_cursor: true,
-        scale: Some(1.5),
-    };
+    let params = CaptureParameters::new("eDP-1")
+        .region(GrimBox::new(0, 0, 800, 600))
+        .overlay_cursor(true)
+        .scale(1.5);
 
-    assert_eq!(params.output_name, "eDP-1");
-    assert_eq!(params.region, Some(GrimBox::new(0, 0, 800, 600)));
-    assert!(params.overlay_cursor);
-    assert_eq!(params.scale, Some(1.5));
+    assert_eq!(params.output_name(), "eDP-1");
+    assert_eq!(params.region_ref(), Some(&GrimBox::new(0, 0, 800, 600)));
+    assert!(params.overlay_cursor_enabled());
+    assert_eq!(params.scale_factor(), Some(1.5));
 }
 
 #[test]
@@ -98,40 +92,19 @@ fn test_error_messages() {
 #[test]
 fn test_crate_export_structs() {
     let _box = GrimBox::new(0, 0, 100, 100);
-    let _params = CaptureParameters {
-        output_name: "test".to_string(),
-        region: None,
-        overlay_cursor: false,
-        scale: None,
-    };
-    let _result = CaptureResult {
-        data: vec![],
-        width: 0,
-        height: 0,
-    };
+    let _params = CaptureParameters::new("test");
+    let _result = CaptureResult::new(vec![], 0, 0);
 }
 
 #[test]
 fn test_image_data_format() {
     let width = 2;
     let height = 2;
-    let data = vec![
-        255,
-        0,
-        0,
-        255, // Red pixel
-        0,
-        255,
-        0,
-        255, // Green pixel
-        0,
-        0,
-        255,
-        255, // Blue pixel
-        255,
-        255,
-        255,
-        255 // White pixel
+    let data = [
+        255, 0, 0, 255, // Red pixel
+        0, 255, 0, 255, // Green pixel
+        0, 0, 255, 255, // Blue pixel
+        255, 255, 255, 255, // White pixel
     ];
 
     assert_eq!(data.len(), (width * height * 4) as usize);
@@ -146,14 +119,11 @@ fn test_image_data_format() {
 fn test_png_compression_levels() {
     let test_data = vec![255u8; 100 * 100 * 4]; // 100x100 image
 
-    match Grim::new() {
-        Ok(grim) => {
-            let _ = grim.to_png(&test_data, 100, 100);
-            let _ = grim.to_png_with_compression(&test_data, 100, 100, 0);
-            let _ = grim.to_png_with_compression(&test_data, 100, 100, 6);
-            let _ = grim.to_png_with_compression(&test_data, 100, 100, 9);
-        }
-        Err(_) => {}
+    if let Ok(grim) = Grim::new() {
+        let _ = grim.to_png(&test_data, 100, 100);
+        let _ = grim.to_png_with_compression(&test_data, 100, 100, 0);
+        let _ = grim.to_png_with_compression(&test_data, 100, 100, 6);
+        let _ = grim.to_png_with_compression(&test_data, 100, 100, 9);
     }
 }
 
@@ -161,38 +131,30 @@ fn test_png_compression_levels() {
 fn test_ppm_format_generation() {
     let test_data = vec![255u8; 10 * 10 * 4];
 
-    match Grim::new() {
-        Ok(grim) => {
-            let ppm_result = grim.to_ppm(&test_data, 10, 10);
-            assert!(ppm_result.is_ok());
+    if let Ok(grim) = Grim::new() {
+        let ppm_result = grim.to_ppm(&test_data, 10, 10);
+        assert!(ppm_result.is_ok());
 
-            let ppm_data = ppm_result.unwrap();
-            let ppm_str = String::from_utf8(ppm_data[..13].to_vec()).unwrap();
+        let ppm_data = ppm_result.unwrap();
+        let ppm_str = String::from_utf8(ppm_data[..13].to_vec()).unwrap();
 
-            // Check PPM header
-            assert!(ppm_str.starts_with("P6\n"));
-            assert!(ppm_str.contains("10 10\n"));
-            assert!(ppm_str.contains("255\n"));
+        // Check PPM header
+        assert!(ppm_str.starts_with("P6\n"));
+        assert!(ppm_str.contains("10 10\n"));
+        assert!(ppm_str.contains("255\n"));
 
-            assert_eq!(ppm_data.len(), 13 + 10 * 10 * 3);
-        }
-        Err(_) => {}
+        assert_eq!(ppm_data.len(), 13 + 10 * 10 * 3);
     }
 }
 
 #[test]
 fn test_capture_parameters_default_behavior() {
-    let params = CaptureParameters {
-        output_name: "test".to_string(),
-        region: None,
-        overlay_cursor: false,
-        scale: None,
-    };
+    let params = CaptureParameters::new("test");
 
-    assert_eq!(params.output_name, "test");
-    assert!(params.region.is_none());
-    assert!(!params.overlay_cursor);
-    assert!(params.scale.is_none());
+    assert_eq!(params.output_name(), "test");
+    assert!(params.region_ref().is_none());
+    assert!(!params.overlay_cursor_enabled());
+    assert!(params.scale_factor().is_none());
 }
 
 #[cfg(feature = "jpeg")]
@@ -200,15 +162,12 @@ fn test_capture_parameters_default_behavior() {
 fn test_jpeg_functionality_available() {
     let test_data = vec![255u8; 10 * 10 * 4];
 
-    match Grim::new() {
-        Ok(grim) => {
-            let jpeg_result = grim.to_jpeg(&test_data, 10, 10);
-            assert!(jpeg_result.is_ok());
+    if let Ok(grim) = Grim::new() {
+        let jpeg_result = grim.to_jpeg(&test_data, 10, 10);
+        assert!(jpeg_result.is_ok());
 
-            let jpeg_result_with_quality = grim.to_jpeg_with_quality(&test_data, 10, 10, 85);
-            assert!(jpeg_result_with_quality.is_ok());
-        }
-        Err(_) => {}
+        let jpeg_result_with_quality = grim.to_jpeg_with_quality(&test_data, 10, 10, 85);
+        assert!(jpeg_result_with_quality.is_ok());
     }
 }
 
@@ -229,29 +188,25 @@ fn test_jpeg_functionality_unavailable() {
 #[test]
 fn test_multi_output_capture_result() {
     let mut outputs_map = HashMap::new();
-    outputs_map.insert("output1".to_string(), CaptureResult {
-        data: vec![255u8; 100 * 100 * 4],
-        width: 100,
-        height: 100,
-    });
-    outputs_map.insert("output2".to_string(), CaptureResult {
-        data: vec![128u8; 200 * 150 * 4],
-        width: 200,
-        height: 150,
-    });
+    outputs_map.insert(
+        "output1".to_string(),
+        CaptureResult::new(vec![255u8; 100 * 100 * 4], 100, 100),
+    );
+    outputs_map.insert(
+        "output2".to_string(),
+        CaptureResult::new(vec![128u8; 200 * 150 * 4], 200, 150),
+    );
 
-    let multi_result = grim_rs::MultiOutputCaptureResult {
-        outputs: outputs_map,
-    };
+    let multi_result = grim_rs::MultiOutputCaptureResult::new(outputs_map);
 
-    assert_eq!(multi_result.outputs.len(), 2);
-    assert!(multi_result.outputs.contains_key("output1"));
-    assert!(multi_result.outputs.contains_key("output2"));
+    assert_eq!(multi_result.outputs().len(), 2);
+    assert!(multi_result.outputs().contains_key("output1"));
+    assert!(multi_result.outputs().contains_key("output2"));
 
-    let output1_result = multi_result.outputs.get("output1").unwrap();
-    assert_eq!(output1_result.width, 100);
-    assert_eq!(output1_result.height, 100);
-    assert_eq!(output1_result.data.len(), 100 * 100 * 4);
+    let output1_result = multi_result.get("output1").unwrap();
+    assert_eq!(output1_result.width(), 100);
+    assert_eq!(output1_result.height(), 100);
+    assert_eq!(output1_result.data().len(), 100 * 100 * 4);
 }
 
 #[test]
@@ -286,10 +241,10 @@ fn test_region_intersection_with_outputs() {
 
     assert!(output_box.intersects(&capture_region));
     let intersection = output_box.intersection(&capture_region).unwrap();
-    assert_eq!(intersection.x, 100);
-    assert_eq!(intersection.y, 100);
-    assert_eq!(intersection.width, 500);
-    assert_eq!(intersection.height, 500);
+    assert_eq!(intersection.x(), 100);
+    assert_eq!(intersection.y(), 100);
+    assert_eq!(intersection.width(), 500);
+    assert_eq!(intersection.height(), 500);
 
     let region_outside = GrimBox::new(2000, 2000, 100, 100);
     assert!(!output_box.intersects(&region_outside));
@@ -376,9 +331,17 @@ mod transform_tests {
             rotated: bool,
         }
 
-        let outputs = vec![
-            TestOutput { width: 1920, height: 1080, rotated: false },
-            TestOutput { width: 1080, height: 1920, rotated: true }
+        let outputs = [
+            TestOutput {
+                width: 1920,
+                height: 1080,
+                rotated: false,
+            },
+            TestOutput {
+                width: 1080,
+                height: 1920,
+                rotated: true,
+            },
         ];
 
         assert_eq!(outputs[0].width, 1920);
@@ -430,22 +393,10 @@ mod transform_tests {
     #[test]
     fn test_image_transform_application() {
         let test_data: Vec<u8> = vec![
-            255,
-            0,
-            0,
-            255, // Red
-            0,
-            255,
-            0,
-            255, // Green
-            0,
-            0,
-            255,
-            255, // Blue
-            255,
-            255,
-            255,
-            255 // White
+            255, 0, 0, 255, // Red
+            0, 255, 0, 255, // Green
+            0, 0, 255, 255, // Blue
+            255, 255, 255, 255, // White
         ];
 
         assert_eq!(test_data.len(), 2 * 2 * 4);
@@ -467,7 +418,7 @@ mod transform_tests {
     /// Test rotation angle constants
     #[test]
     fn test_rotation_angles() {
-        use std::f64::consts::{ FRAC_PI_2, PI };
+        use std::f64::consts::{FRAC_PI_2, PI};
 
         let angle_90 = FRAC_PI_2; // π/2
         let angle_180 = PI; // π

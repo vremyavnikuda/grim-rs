@@ -5,6 +5,63 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - 2025-10-11
+
+### Changed
+- **Box struct encapsulation**: Made all fields (`x`, `y`, `width`, `height`) private
+  - Added getter methods: `x()`, `y()`, `width()`, `height()`
+  - Migration: [doc](./MIGRATION.md)
+- **CaptureResult struct encapsulation**: Made all fields (`data`, `width`, `height`) private
+  - Added getter methods: `data()` → `&[u8]`, `width()` → `u32`, `height()` → `u32`
+  - Added `into_data(self)` → `Vec<u8>` for ownership transfer without cloning
+  - Added `new(data, width, height)` constructor for creating instances
+  - Migration: [doc](./MIGRATION.md)
+- **Output struct encapsulation**: Made all fields (`name`, `geometry`, `scale`, `description`) private
+  - Added getter methods: `name()` → `&str`, `geometry()` → `&Box`, `scale()` → `i32`, `description()` → `Option<&str>`
+  - Migration: [doc](./MIGRATION.md)
+- **CaptureParameters struct encapsulation with Builder Pattern**: Made all fields private
+  - Fields: `output_name`, `region`, `overlay_cursor`, `scale`
+  - Added builder pattern: `CaptureParameters::new(name).region(box).overlay_cursor(true).scale(1.5)`
+  - Added getters: `output_name()` → `&str`, `region_ref()` → `Option<&Box>`, `overlay_cursor_enabled()` → `bool`, `scale_factor()` → `Option<f64>`
+  - Migration: [doc](./MIGRATION.md)
+- **MultiOutputCaptureResult struct encapsulation**: Made `outputs` field private
+  - Added methods: `get(name)` → `Option<&CaptureResult>`, `outputs()` → `&HashMap<String, CaptureResult>`, `into_outputs()` → `HashMap<String, CaptureResult>`
+  - Added constructor: `new(outputs)` for creating instances
+  - Migration: [doc](./MIGRATION.md)
+
+### Fixed
+- **Critical bug in `capture_outputs()`**: Fixed issue where all captures used the first output instead of the specific output for each parameter.
+
+### Improved
+- Better API design following Rust conventions
+- More efficient data access with `data()` returning `&[u8]` slice instead of owned `Vec<u8>`
+- Ownership transfer optimization with `into_data()` method
+- Improved error handling: replaced all `.unwrap()` calls in production code with proper error propagation
+- Created `lock_frame_state()` helper function for safe mutex locking. Prevents panics from poisoned mutex errors
+- Removed `impl Default for Grim` to follow Rust API guidelines (Default should not panic)
+- Code quality improvements following Rust best practices:
+    - Removed unnecessary parentheses around `let` expressions
+    - Simplified duplicate conditional branches in image scaling filter selection
+    - Replaced manual range checks with `.contains()` method for clearer intent
+    - Replaced verbose `match` statements with `if let` for single-pattern destructuring
+    - Replaced `Iterator::flatten()` with `map_while(Result::ok)` to prevent potential infinite loops on errors
+    - Replaced unnecessary `vec![]` allocations with stack-allocated arrays where heap allocation not needed
+    - Removed needless borrows in multiple locations for cleaner code
+    - Replaced `.map_or(false, |s| ...)` with `.is_some_and(|s| ...)` for better readability
+    - Removed unused functions: `get_output_rotation()`, `get_output_flipped()`, `check_outputs_overlap()`, `is_grid_aligned()`
+    - Removed unused variables: `_grid_aligned`, `_scaled_region`
+    - Created clean function hierarchy: `save_or_write_result()` → format dispatchers → format-specific handlers
+    - Improved maintainability: each function has single responsibility
+    - Centralized error handling with proper `#[cfg(feature = "jpeg")]` attributes
+
+### Performance
+- Optimized memory usage by removing unnecessary cloning:
+  - Eliminated redundant `WlOutput` clone in `capture_region()` that was immediately borrowed
+  - Reduced Arc reference counting overhead by one clone per output in multi-monitor scenarios
+
+### Testing
+- Added comprehensive test coverage
+
 ## [0.1.2] - 2025-10-04
 
 ### Fixed issues: [#2](https://github.com/vremyavnikuda/grim-rs/issues/2)

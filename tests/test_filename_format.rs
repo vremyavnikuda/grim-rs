@@ -18,13 +18,17 @@ fn test_filename_format() {
     );
 
     let year: u32 = filename[0..4].parse().expect("Failed to parse year");
-    assert!(year >= 2020 && year <= 2100, "Year {} is out of reasonable range", year);
+    assert!(
+        (2020..=2100).contains(&year),
+        "Year {} is out of reasonable range",
+        year
+    );
 
     let month: u32 = filename[4..6].parse().expect("Failed to parse month");
-    assert!(month >= 1 && month <= 12, "Month {} is invalid", month);
+    assert!((1..=12).contains(&month), "Month {} is invalid", month);
 
     let day: u32 = filename[6..8].parse().expect("Failed to parse day");
-    assert!(day >= 1 && day <= 31, "Day {} is invalid", day);
+    assert!((1..=31).contains(&day), "Day {} is invalid", day);
 
     let hour_start = 9; // After "YYYYMMDD_"
     let hour: u32 = filename[hour_start..hour_start + 2]
@@ -56,15 +60,27 @@ fn test_filename_readability() {
     let filename = format!("{}_grim.png", timestamp);
 
     assert!(
-        !filename.chars().all(|c| c.is_numeric() || c == '.'),
+        !filename.chars().all(|c| (c.is_numeric() || c == '.')),
         "Filename looks like a unix timestamp"
     );
 
     // Verify it contains readable separators
-    assert!(filename.contains("h"), "Filename missing hour separator 'h'");
-    assert!(filename.contains("m"), "Filename missing minute separator 'm'");
-    assert!(filename.contains("s"), "Filename missing second separator 's'");
-    assert!(filename.contains("_grim"), "Filename missing '_grim' identifier");
+    assert!(
+        filename.contains("h"),
+        "Filename missing hour separator 'h'"
+    );
+    assert!(
+        filename.contains("m"),
+        "Filename missing minute separator 'm'"
+    );
+    assert!(
+        filename.contains("s"),
+        "Filename missing second separator 's'"
+    );
+    assert!(
+        filename.contains("_grim"),
+        "Filename missing '_grim' identifier"
+    );
 
     println!("✓ Filename readability test passed: {}", filename);
 }
