@@ -571,5 +571,3 @@ These breaking changes follow **Rust API Guidelines** ([rust-lang.github.io/api-
 2. **Builder Pattern** (C-BUILDER): Ergonomic optional parameters
 3. **Borrowing** (C-BORROWED): `data()` returns `&[u8]` instead of cloning
 4. **Ownership Transfer** (C-OWNS): `into_data()` for zero-copy ownership
-
-These patterns make grim-rs more idiomatic, efficient, and maintainable.
