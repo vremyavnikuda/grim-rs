@@ -31,6 +31,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added constructor: `new(outputs)` for creating instances
   - Migration: Use accessor methods instead of direct field access
 
+### Fixed
+- **Critical bug in `capture_outputs()`**: Fixed issue where all captures used the first output instead of the specific output for each parameter
+  - Root cause: Single `output` variable was initialized once and reused for all parameters
+  - Impact: When capturing multiple outputs simultaneously, all captures would be from the first output only
+  - Solution: For each `CaptureParameters`, now correctly finds the corresponding `WlOutput` by matching protocol_id with output_info
+  - This ensures each output is captured independently as intended
+
 ### Improved
 - Better API design following Rust conventions (encapsulation, no public fields)
 - More efficient data access with `data()` returning `&[u8]` slice instead of owned `Vec<u8>`
@@ -41,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Uses `.ok().map_or()` pattern in filter closures where `?` is not available
   - Uses `.expect()` with descriptive messages in event handlers that cannot return Result
   - Prevents panics from poisoned mutex errors
+- Removed `impl Default for Grim` to follow Rust API guidelines (Default should not panic)
 
 ## [0.1.2] - 2025-10-04
 

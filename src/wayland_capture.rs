@@ -904,11 +904,10 @@ impl WaylandCapture {
         &mut self,
         parameters: Vec<CaptureParameters>,
     ) -> Result<MultiOutputCaptureResult> {
-        let output = self
-            .globals
-            .outputs
-            .first()
-            .ok_or_else(|| Error::NoOutputs)?;
+        if self.globals.outputs.is_empty() {
+            return Err(Error::NoOutputs);
+        }
+        
         let screencopy_manager =
             self.globals
                 .screencopy_manager
@@ -920,13 +919,20 @@ impl WaylandCapture {
         let qh = event_queue.handle();
         let mut frame_states: HashMap<String, Arc<Mutex<FrameState>>> = HashMap::new();
         let mut frames: HashMap<String, ZwlrScreencopyFrameV1> = HashMap::new();
+        
         for param in &parameters {
-            let output_info = self
+            let (output_id, output_info) = self
                 .globals
                 .output_info
                 .iter()
                 .find(|(_, info)| info.name == param.output_name())
-                .map(|(_, info)| info)
+                .ok_or_else(|| Error::OutputNotFound(param.output_name().to_string()))?;
+            
+            let output = self
+                .globals
+                .outputs
+                .iter()
+                .find(|o| o.id().protocol_id() == *output_id)
                 .ok_or_else(|| Error::OutputNotFound(param.output_name().to_string()))?;
             let region = if let Some(region) = param.region_ref() {
                 let output_right = output_info.x + output_info.width;
