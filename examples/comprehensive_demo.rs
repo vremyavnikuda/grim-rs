@@ -24,7 +24,6 @@ fn generate_demo_filename(extension: &str) -> String {
 }
 
 fn main() -> Result<()> {
-    // Initialize Grim
     let mut grim = Grim::new()?;
 
     println!("Getting Display Outputs Information");
@@ -301,17 +300,14 @@ fn main() -> Result<()> {
         println!("JPEG bytes (quality 90): {} bytes", jpeg_hq_bytes.len());
     }
 
-    // Save the bytes to demonstrate they're valid
     let filename = generate_demo_filename("png");
     let mut file = File::create(&filename)?;
     file.write_all(&png_bytes)?;
     println!("Saved PNG from bytes: {}\n", filename);
 
     if outputs.len() >= 2 {
-        // Create a region that spans across outputs
         let output1 = outputs[0].geometry();
 
-        // Region from end of first output to start of second
         let span_x = output1.x() + output1.width() - 200;
         let span_width = 400;
         let span_region = Box::new(span_x, output1.y(), span_width, 400);
@@ -340,7 +336,6 @@ fn main() -> Result<()> {
     let test_region = Box::new(0, 0, 640, 480);
     let test_result = grim.capture_region(test_region)?;
 
-    // Save in different formats and compare sizes
     let filename_png = generate_demo_filename("png");
     let filename_ppm = generate_demo_filename("ppm");
 

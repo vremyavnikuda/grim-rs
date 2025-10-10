@@ -746,7 +746,7 @@ impl Grim {
         height: u32,
         path: P,
     ) -> Result<()> {
-        self.save_jpeg_with_quality(data, width, height, path, 80) // Default quality of 80
+        self.save_jpeg_with_quality(data, width, height, path, 80)
     }
 
     /// Save captured data as JPEG with quality control.
@@ -913,7 +913,7 @@ impl Grim {
     /// ```
     #[cfg(feature = "jpeg")]
     pub fn to_jpeg(&self, data: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
-        self.to_jpeg_with_quality(data, width, height, 80) // Default quality of 80
+        self.to_jpeg_with_quality(data, width, height, 80)
     }
 
     /// Get image data as JPEG bytes with quality control.

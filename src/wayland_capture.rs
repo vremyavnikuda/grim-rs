@@ -17,7 +17,6 @@ use wayland_protocols_wlr::screencopy::v1::client::{
     zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1,
 };
 
-// Screencopy frame flags from the protocol
 const ZWLR_SCREENCOPY_FRAME_V1_FLAGS_Y_INVERT: u32 = 1;
 use std::collections::HashMap;
 use std::os::fd::{AsRawFd, BorrowedFd};
@@ -325,7 +324,6 @@ impl WaylandCapture {
     }
 
     fn refresh_outputs(&mut self) -> Result<()> {
-        // Clear existing outputs to re-bind them
         self.globals.outputs.clear();
         self.globals.output_info.clear();
         self.globals.output_xdg_map.clear();
@@ -348,7 +346,6 @@ impl WaylandCapture {
             })?;
         }
 
-        // If xdg_output_manager is not available, guess logical geometry from physical
         if self.globals.xdg_output_manager.is_none() {
             for info in self.globals.output_info.values_mut() {
                 if !info.logical_scale_known {
@@ -1195,7 +1192,6 @@ impl Dispatch<WlOutput, ()> for WaylandCapture {
                     info.width = width;
                     info.height = height;
                     log::debug!("Updated output info: {}x{}", info.width, info.height);
-                    // Only update logical dimensions if we don't have xdg_output info
                     if !info.logical_scale_known {
                         info.logical_width = width;
                         info.logical_height = height;
