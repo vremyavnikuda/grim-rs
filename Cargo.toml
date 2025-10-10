@@ -39,6 +39,7 @@ chrono = "0.4"
 [dev-dependencies]
 env_logger = "0.10"
 regex = "1.10"
+proptest = "1.4"
 
 [features]
 default = ["png_support", "jpeg"]

@@ -57,16 +57,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Replaced verbose `match` statements with `if let` for single-pattern destructuring
     - Replaced `Iterator::flatten()` with `map_while(Result::ok)` to prevent potential infinite loops on errors
     - Replaced unnecessary `vec![]` allocations with stack-allocated arrays where heap allocation not needed
+    - Removed needless borrows in multiple locations for cleaner code
+    - Replaced `.map_or(false, |s| ...)` with `.is_some_and(|s| ...)` for better readability
   - Removed all dead code (84 lines) following RULES.md guidelines:
     - Removed unused functions: `get_output_rotation()`, `get_output_flipped()`, `check_outputs_overlap()`, `is_grid_aligned()`
     - Removed unused variables: `_grid_aligned`, `_scaled_region`
     - Code must be used or removed, not kept with `#[allow(dead_code)]`
+  - Refactored duplicate save/write code in CLI binary following DRY principle:
+    - Extracted 92 lines of duplicate code into 8 focused helper functions
+    - Created clean function hierarchy: `save_or_write_result()` → format dispatchers → format-specific handlers
+    - Improved maintainability: each function has single responsibility
+    - Centralized error handling with proper `#[cfg(feature = "jpeg")]` attributes
+    - Net result: +38 lines but significantly improved code organization and testability
 
 ### Performance
 - Optimized memory usage by removing unnecessary cloning:
   - Eliminated redundant `WlOutput` clone in `capture_region()` that was immediately borrowed
   - Reduced Arc reference counting overhead by one clone per output in multi-monitor scenarios
   - All remaining clones analyzed and verified as necessary for API correctness or performance
+
+### Testing
+- Added comprehensive test coverage following Rust best practices:
+  - Property-based tests using `proptest` for Box geometry (13 tests):
+    * Mathematical properties: commutativity, subset relationships
+    * Intersection and intersects correctness
+    * Parse/display roundtrip validation
+    * Edge cases: empty boxes, negative dimensions
+  - Encapsulation tests for new API (12 tests):
+    * Box getters verification
+    * CaptureResult accessors and into_data() ownership transfer
+    * CaptureParameters builder pattern validation
+    * MultiOutputCaptureResult accessor methods
+  - Total: 25 new tests added (26 doctests + 64 unit tests = 90 tests)
 
 ## [0.1.2] - 2025-10-04
 

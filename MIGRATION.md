@@ -13,6 +13,7 @@ Version 0.1.3 introduces **breaking changes** related to struct field encapsulat
 3. **Output struct**: Fields made private, added getters
 4. **CaptureParameters struct**: Fields made private, added builder pattern
 5. **MultiOutputCaptureResult struct**: Field made private, added accessor methods
+6. **Grim struct**: Removed `impl Default` - use `Grim::new()?` instead of `Grim::default()`
 
 ---
 
@@ -359,6 +360,40 @@ impl MultiOutputCaptureResult {
 
 ---
 
+## 6. Removed `impl Default for Grim`
+
+### What Changed
+
+`Grim` no longer implements the `Default` trait. This was removed because `Grim::new()` can fail (Wayland connection), and `Default::default()` should not panic according to Rust API guidelines.
+
+### Migration
+
+**Before (0.1.2):**
+```rust
+use grim_rs::Grim;
+
+// Using Default trait (this panicked on failure)
+let mut grim = Grim::default(); // ❌ No longer compiles!
+```
+
+**After (0.1.3):**
+```rust
+use grim_rs::Grim;
+
+// Use new() which returns Result
+let mut grim = Grim::new()?; // ✅ Proper error handling
+```
+
+### Why This Change?
+
+According to Rust API Guidelines, `Default::default()` should not panic. Since `Grim::new()` can fail when:
+- Wayland connection cannot be established
+- Required Wayland protocols are not available
+
+It's better to use `Result` for proper error handling rather than hiding failures in `Default`.
+
+---
+
 ## Non-Breaking Improvements
 
 ### Error Handling
@@ -378,10 +413,17 @@ let state = lock_frame_state(&frame_state)?;
 - Better error messages
 - More robust error recovery
 
+### Bug Fixes
+
+**Critical bug in `capture_outputs()` fixed**: Previously, when capturing multiple outputs, all captures incorrectly used the first output instead of the specific output requested. This is now fixed - each output is captured independently as intended.
+
+This fix doesn't require code changes but significantly improves multi-monitor capture reliability.
+
 ---
 
 ## Quick Migration Checklist
 
+- [ ] Replace `Grim::default()` with `Grim::new()?`
 - [ ] Replace `box.x` with `box.x()`
 - [ ] Replace `box.y` with `box.y()`
 - [ ] Replace `box.width` with `box.width()`
