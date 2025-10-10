@@ -346,7 +346,7 @@ fn get_xdg_pictures_dir() -> Option<PathBuf> {
     let file = fs::File::open(user_dirs_file).ok()?;
     let reader = io::BufReader::new(file);
 
-    for line in reader.lines().flatten() {
+    for line in reader.lines().map_while(Result::ok) {
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') {
             continue;

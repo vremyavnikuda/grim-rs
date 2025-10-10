@@ -100,7 +100,7 @@ fn test_crate_export_structs() {
 fn test_image_data_format() {
     let width = 2;
     let height = 2;
-    let data = vec![
+    let data = [
         255, 0, 0, 255, // Red pixel
         0, 255, 0, 255, // Green pixel
         0, 0, 255, 255, // Blue pixel
@@ -119,14 +119,11 @@ fn test_image_data_format() {
 fn test_png_compression_levels() {
     let test_data = vec![255u8; 100 * 100 * 4]; // 100x100 image
 
-    match Grim::new() {
-        Ok(grim) => {
-            let _ = grim.to_png(&test_data, 100, 100);
-            let _ = grim.to_png_with_compression(&test_data, 100, 100, 0);
-            let _ = grim.to_png_with_compression(&test_data, 100, 100, 6);
-            let _ = grim.to_png_with_compression(&test_data, 100, 100, 9);
-        }
-        Err(_) => {}
+    if let Ok(grim) = Grim::new() {
+        let _ = grim.to_png(&test_data, 100, 100);
+        let _ = grim.to_png_with_compression(&test_data, 100, 100, 0);
+        let _ = grim.to_png_with_compression(&test_data, 100, 100, 6);
+        let _ = grim.to_png_with_compression(&test_data, 100, 100, 9);
     }
 }
 
@@ -134,22 +131,19 @@ fn test_png_compression_levels() {
 fn test_ppm_format_generation() {
     let test_data = vec![255u8; 10 * 10 * 4];
 
-    match Grim::new() {
-        Ok(grim) => {
-            let ppm_result = grim.to_ppm(&test_data, 10, 10);
-            assert!(ppm_result.is_ok());
+    if let Ok(grim) = Grim::new() {
+        let ppm_result = grim.to_ppm(&test_data, 10, 10);
+        assert!(ppm_result.is_ok());
 
-            let ppm_data = ppm_result.unwrap();
-            let ppm_str = String::from_utf8(ppm_data[..13].to_vec()).unwrap();
+        let ppm_data = ppm_result.unwrap();
+        let ppm_str = String::from_utf8(ppm_data[..13].to_vec()).unwrap();
 
-            // Check PPM header
-            assert!(ppm_str.starts_with("P6\n"));
-            assert!(ppm_str.contains("10 10\n"));
-            assert!(ppm_str.contains("255\n"));
+        // Check PPM header
+        assert!(ppm_str.starts_with("P6\n"));
+        assert!(ppm_str.contains("10 10\n"));
+        assert!(ppm_str.contains("255\n"));
 
-            assert_eq!(ppm_data.len(), 13 + 10 * 10 * 3);
-        }
-        Err(_) => {}
+        assert_eq!(ppm_data.len(), 13 + 10 * 10 * 3);
     }
 }
 
@@ -168,15 +162,12 @@ fn test_capture_parameters_default_behavior() {
 fn test_jpeg_functionality_available() {
     let test_data = vec![255u8; 10 * 10 * 4];
 
-    match Grim::new() {
-        Ok(grim) => {
-            let jpeg_result = grim.to_jpeg(&test_data, 10, 10);
-            assert!(jpeg_result.is_ok());
+    if let Ok(grim) = Grim::new() {
+        let jpeg_result = grim.to_jpeg(&test_data, 10, 10);
+        assert!(jpeg_result.is_ok());
 
-            let jpeg_result_with_quality = grim.to_jpeg_with_quality(&test_data, 10, 10, 85);
-            assert!(jpeg_result_with_quality.is_ok());
-        }
-        Err(_) => {}
+        let jpeg_result_with_quality = grim.to_jpeg_with_quality(&test_data, 10, 10, 85);
+        assert!(jpeg_result_with_quality.is_ok());
     }
 }
 
@@ -340,7 +331,7 @@ mod transform_tests {
             rotated: bool,
         }
 
-        let outputs = vec![
+        let outputs = [
             TestOutput {
                 width: 1920,
                 height: 1080,

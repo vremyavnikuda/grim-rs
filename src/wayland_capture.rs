@@ -797,9 +797,7 @@ impl WaylandCapture {
                     ))
                 })?;
 
-        let filter = if scale > 1.0 {
-            imageops::FilterType::Triangle
-        } else if scale >= 0.75 {
+        let filter = if scale >= 0.75 {
             imageops::FilterType::Triangle
         } else if scale >= 0.5 {
             imageops::FilterType::CatmullRom
@@ -823,7 +821,7 @@ impl WaylandCapture {
         if self.globals.outputs.is_empty() {
             return Err(Error::NoOutputs);
         }
-        
+
         let screencopy_manager =
             self.globals
                 .screencopy_manager
@@ -835,7 +833,7 @@ impl WaylandCapture {
         let qh = event_queue.handle();
         let mut frame_states: HashMap<String, Arc<Mutex<FrameState>>> = HashMap::new();
         let mut frames: HashMap<String, ZwlrScreencopyFrameV1> = HashMap::new();
-        
+
         for param in &parameters {
             let (output_id, output_info) = self
                 .globals
@@ -843,7 +841,7 @@ impl WaylandCapture {
                 .iter()
                 .find(|(_, info)| info.name == param.output_name())
                 .ok_or_else(|| Error::OutputNotFound(param.output_name().to_string()))?;
-            
+
             let output = self
                 .globals
                 .outputs
@@ -1020,10 +1018,10 @@ impl WaylandCapture {
                 (state.width, state.height)
             };
             let mut buffer_data = mmap.to_vec();
-            if let Some(format) = ({
+            if let Some(format) = {
                 let state = lock_frame_state(&frame_state)?;
                 state.format
-            }) {
+            } {
                 match format {
                     ShmFormat::Xrgb8888 => {
                         for chunk in buffer_data.chunks_exact_mut(4) {
