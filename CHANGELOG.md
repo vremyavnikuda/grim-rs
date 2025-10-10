@@ -5,52 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.3] - 2025-10-11
 
 ### Changed
-- **BREAKING: Box struct encapsulation**: Made all fields (`x`, `y`, `width`, `height`) private
+- **Box struct encapsulation**: Made all fields (`x`, `y`, `width`, `height`) private
   - Added getter methods: `x()`, `y()`, `width()`, `height()`
-  - Follows Rust API guidelines for proper encapsulation
-  - Migration: Replace direct field access (e.g., `box.x`) with getter calls (e.g., `box.x()`)
-- **BREAKING: CaptureResult struct encapsulation**: Made all fields (`data`, `width`, `height`) private
+  - Migration: [doc](./MIGRATION.md)
+- **CaptureResult struct encapsulation**: Made all fields (`data`, `width`, `height`) private
   - Added getter methods: `data()` → `&[u8]`, `width()` → `u32`, `height()` → `u32`
   - Added `into_data(self)` → `Vec<u8>` for ownership transfer without cloning
   - Added `new(data, width, height)` constructor for creating instances
-  - Migration: Replace direct field access with getters and use constructor for initialization
-- **BREAKING: Output struct encapsulation**: Made all fields (`name`, `geometry`, `scale`, `description`) private
+  - Migration: [doc](./MIGRATION.md)
+- **Output struct encapsulation**: Made all fields (`name`, `geometry`, `scale`, `description`) private
   - Added getter methods: `name()` → `&str`, `geometry()` → `&Box`, `scale()` → `i32`, `description()` → `Option<&str>`
-  - Follows Rust API guidelines for proper encapsulation
-  - Migration: Replace direct field access (e.g., `output.name`) with getter calls (e.g., `output.name()`)
-- **BREAKING: CaptureParameters struct encapsulation with Builder Pattern**: Made all fields private
+  - Migration: [doc](./MIGRATION.md)
+- **CaptureParameters struct encapsulation with Builder Pattern**: Made all fields private
   - Fields: `output_name`, `region`, `overlay_cursor`, `scale`
   - Added builder pattern: `CaptureParameters::new(name).region(box).overlay_cursor(true).scale(1.5)`
   - Added getters: `output_name()` → `&str`, `region_ref()` → `Option<&Box>`, `overlay_cursor_enabled()` → `bool`, `scale_factor()` → `Option<f64>`
-  - Migration: Use builder pattern instead of struct literal initialization
-- **BREAKING: MultiOutputCaptureResult struct encapsulation**: Made `outputs` field private
+  - Migration: [doc](./MIGRATION.md)
+- **MultiOutputCaptureResult struct encapsulation**: Made `outputs` field private
   - Added methods: `get(name)` → `Option<&CaptureResult>`, `outputs()` → `&HashMap<String, CaptureResult>`, `into_outputs()` → `HashMap<String, CaptureResult>`
   - Added constructor: `new(outputs)` for creating instances
-  - Migration: Use accessor methods instead of direct field access
+  - Migration: [doc](./MIGRATION.md)
 
 ### Fixed
-- **Critical bug in `capture_outputs()`**: Fixed issue where all captures used the first output instead of the specific output for each parameter
-  - Root cause: Single `output` variable was initialized once and reused for all parameters
-  - Impact: When capturing multiple outputs simultaneously, all captures would be from the first output only
-  - Solution: For each `CaptureParameters`, now correctly finds the corresponding `WlOutput` by matching protocol_id with output_info
-  - This ensures each output is captured independently as intended
+- **Critical bug in `capture_outputs()`**: Fixed issue where all captures used the first output instead of the specific output for each parameter.
 
 ### Improved
-- Better API design following Rust conventions (encapsulation, no public fields)
+- Better API design following Rust conventions
 - More efficient data access with `data()` returning `&[u8]` slice instead of owned `Vec<u8>`
 - Ownership transfer optimization with `into_data()` method
 - Improved error handling: replaced all `.unwrap()` calls in production code with proper error propagation
-  - Created `lock_frame_state()` helper function for safe mutex locking
-  - Uses `?` operator for Result propagation in 12 locations
-  - Uses `.ok().map_or()` pattern in filter closures where `?` is not available
-  - Uses `.expect()` with descriptive messages in event handlers that cannot return Result
-  - Prevents panics from poisoned mutex errors
+- Created `lock_frame_state()` helper function for safe mutex locking. Prevents panics from poisoned mutex errors
 - Removed `impl Default for Grim` to follow Rust API guidelines (Default should not panic)
 - Code quality improvements following Rust best practices:
-  - Fixed all Clippy warnings for more idiomatic Rust code:
     - Removed unnecessary parentheses around `let` expressions
     - Simplified duplicate conditional branches in image scaling filter selection
     - Replaced manual range checks with `.contains()` method for clearer intent
@@ -59,36 +48,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Replaced unnecessary `vec![]` allocations with stack-allocated arrays where heap allocation not needed
     - Removed needless borrows in multiple locations for cleaner code
     - Replaced `.map_or(false, |s| ...)` with `.is_some_and(|s| ...)` for better readability
-  - Removed all dead code (84 lines) following RULES.md guidelines:
     - Removed unused functions: `get_output_rotation()`, `get_output_flipped()`, `check_outputs_overlap()`, `is_grid_aligned()`
     - Removed unused variables: `_grid_aligned`, `_scaled_region`
-    - Code must be used or removed, not kept with `#[allow(dead_code)]`
-  - Refactored duplicate save/write code in CLI binary following DRY principle:
-    - Extracted 92 lines of duplicate code into 8 focused helper functions
     - Created clean function hierarchy: `save_or_write_result()` → format dispatchers → format-specific handlers
     - Improved maintainability: each function has single responsibility
     - Centralized error handling with proper `#[cfg(feature = "jpeg")]` attributes
-    - Net result: +38 lines but significantly improved code organization and testability
 
 ### Performance
 - Optimized memory usage by removing unnecessary cloning:
   - Eliminated redundant `WlOutput` clone in `capture_region()` that was immediately borrowed
   - Reduced Arc reference counting overhead by one clone per output in multi-monitor scenarios
-  - All remaining clones analyzed and verified as necessary for API correctness or performance
 
 ### Testing
-- Added comprehensive test coverage following Rust best practices:
-  - Property-based tests using `proptest` for Box geometry (13 tests):
-    * Mathematical properties: commutativity, subset relationships
-    * Intersection and intersects correctness
-    * Parse/display roundtrip validation
-    * Edge cases: empty boxes, negative dimensions
-  - Encapsulation tests for new API (12 tests):
-    * Box getters verification
-    * CaptureResult accessors and into_data() ownership transfer
-    * CaptureParameters builder pattern validation
-    * MultiOutputCaptureResult accessor methods
-  - Total: 25 new tests added (26 doctests + 64 unit tests = 90 tests)
+- Added comprehensive test coverage
 
 ## [0.1.2] - 2025-10-04
 
