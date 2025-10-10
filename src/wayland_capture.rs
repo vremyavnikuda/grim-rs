@@ -607,12 +607,8 @@ impl WaylandCapture {
                     ((intersection.height() as f64) * scale) as i32,
                 );
 
-                let output_handle = output.clone();
-                let mut capture = self.capture_region_for_output(
-                    &output_handle,
-                    physical_local_region,
-                    overlay_cursor,
-                )?;
+                let mut capture =
+                    self.capture_region_for_output(&output, physical_local_region, overlay_cursor)?;
 
                 if scale != 1.0 {
                     capture = self.scale_image_data(capture, 1.0 / scale)?;
