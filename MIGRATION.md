@@ -495,23 +495,23 @@ This fix doesn't require code changes but significantly improves multi-monitor c
 
 ---
 
-## Quick Migration Checklist
+## Migration Checklist
 
-- [ ] Replace `Grim::default()` with `Grim::new()?`
-- [ ] Replace `box.x` with `box.x()`
-- [ ] Replace `box.y` with `box.y()`
-- [ ] Replace `box.width` with `box.width()`
-- [ ] Replace `box.height` with `box.height()`
-- [ ] Replace `result.data` with `result.data()`
-- [ ] Replace `result.width` with `result.width()`
-- [ ] Replace `result.height` with `result.height()`
-- [ ] Replace `output.name` with `output.name()`
-- [ ] Replace `output.geometry` with `output.geometry()`
-- [ ] Replace `output.scale` with `output.scale()`
-- [ ] Replace `output.description` with `output.description()`
-- [ ] Replace `CaptureParameters { ... }` with `CaptureParameters::new(...).field(...)`
-- [ ] Replace `multi_result.outputs.get(...)` with `multi_result.get(...)`
-- [ ] Replace `multi_result.outputs` with `multi_result.outputs()`
+- Replace `Grim::default()` with `Grim::new()?`
+- Replace `box.x` with `box.x()`
+- Replace `box.y` with `box.y()`
+- Replace `box.width` with `box.width()`
+- Replace `box.height` with `box.height()`
+- Replace `result.data` with `result.data()`
+- Replace `result.width` with `result.width()`
+- Replace `result.height` with `result.height()`
+- Replace `output.name` with `output.name()`
+- Replace `output.geometry` with `output.geometry()`
+- Replace `output.scale` with `output.scale()`
+- Replace `output.description` with `output.description()`
+- Replace `CaptureParameters { ... }` with `CaptureParameters::new(...).field(...)`
+- Replace `multi_result.outputs.get(...)` with `multi_result.get(...)`
+- Replace `multi_result.outputs` with `multi_result.outputs()`
 
 ---
 
