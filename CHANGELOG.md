@@ -49,6 +49,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Uses `.expect()` with descriptive messages in event handlers that cannot return Result
   - Prevents panics from poisoned mutex errors
 - Removed `impl Default for Grim` to follow Rust API guidelines (Default should not panic)
+- Code quality improvements following Rust best practices:
+  - Fixed all Clippy warnings for more idiomatic Rust code:
+    - Removed unnecessary parentheses around `let` expressions
+    - Simplified duplicate conditional branches in image scaling filter selection
+    - Replaced manual range checks with `.contains()` method for clearer intent
+    - Replaced verbose `match` statements with `if let` for single-pattern destructuring
+    - Replaced `Iterator::flatten()` with `map_while(Result::ok)` to prevent potential infinite loops on errors
+    - Replaced unnecessary `vec![]` allocations with stack-allocated arrays where heap allocation not needed
+  - Removed all dead code (84 lines) following RULES.md guidelines:
+    - Removed unused functions: `get_output_rotation()`, `get_output_flipped()`, `check_outputs_overlap()`, `is_grid_aligned()`
+    - Removed unused variables: `_grid_aligned`, `_scaled_region`
+    - Code must be used or removed, not kept with `#[allow(dead_code)]`
+
+### Performance
+- Optimized memory usage by removing unnecessary cloning:
+  - Eliminated redundant `WlOutput` clone in `capture_region()` that was immediately borrowed
+  - Reduced Arc reference counting overhead by one clone per output in multi-monitor scenarios
+  - All remaining clones analyzed and verified as necessary for API correctness or performance
 
 ## [0.1.2] - 2025-10-04
 
