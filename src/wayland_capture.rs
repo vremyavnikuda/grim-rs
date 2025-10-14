@@ -769,10 +769,7 @@ impl WaylandCapture {
         }
 
         let scale_int = scale as u32;
-        if scale > 1.0
-            && (scale - (scale_int as f64)).abs() < 0.01
-            && scale_int >= 2
-            && scale_int <= 4
+        if scale > 1.0 && (scale - (scale_int as f64)).abs() < 0.01 && (2..=4).contains(&scale_int)
         {
             return self.scale_image_integer_fast(capture_result, scale_int);
         }
@@ -957,7 +954,7 @@ impl WaylandCapture {
                     state
                         .lock()
                         .ok()
-                        .is_some_and(|s| (s.buffer.is_some() || s.ready))
+                        .is_some_and(|s| s.buffer.is_some() || s.ready)
                 })
                 .count();
             if completed_frames >= total_frames {
@@ -1075,10 +1072,10 @@ impl WaylandCapture {
                 (state.width, state.height)
             };
             let mut buffer_data = mmap.to_vec();
-            if let Some(format) = ({
+            if let Some(format) = {
                 let state = lock_frame_state(frame_state)?;
                 state.format
-            }) {
+            } {
                 match format {
                     ShmFormat::Xrgb8888 => {
                         for chunk in buffer_data.chunks_exact_mut(4) {

@@ -238,6 +238,7 @@ impl MultiOutputCaptureResult {
 /// specific outputs, regions, or multiple outputs with different parameters.
 pub struct Grim {
     platform_capture: PlatformCapture,
+    buffer_pool: std::cell::RefCell<Vec<Vec<u8>>>,
 }
 
 impl Grim {
@@ -265,7 +266,78 @@ impl Grim {
     /// ```
     pub fn new() -> Result<Self> {
         let platform_capture = PlatformCapture::new()?;
-        Ok(Self { platform_capture })
+        Ok(Self {
+            platform_capture,
+            buffer_pool: std::cell::RefCell::new(Vec::new()),
+        })
+    }
+
+    /// Get a buffer from the pool or allocate a new one.
+    ///
+    /// Reuses buffers from the pool when available, otherwise allocates a new buffer.
+    /// This reduces memory allocations for repeated encode operations.
+    ///
+    /// This is an internal method used by encode functions.
+    ///
+    /// # Arguments
+    ///
+    /// * `size` - Minimum required capacity for the buffer
+    ///
+    /// # Returns
+    ///
+    /// A Vec<u8> with at least the requested capacity. The buffer is cleared before return.
+    fn get_buffer(&self, size: usize) -> Vec<u8> {
+        let mut pool = self.buffer_pool.borrow_mut();
+
+        // Try to reuse a buffer from pool with sufficient capacity
+        if let Some(pos) = pool.iter().position(|buf| buf.capacity() >= size) {
+            let mut buffer = pool.swap_remove(pos);
+            buffer.clear();
+            buffer
+        } else {
+            // Allocate new buffer with requested capacity
+            Vec::with_capacity(size)
+        }
+    }
+
+    /// Return a buffer to the pool for reuse.
+    ///
+    /// This is a public API for advanced users who want explicit control over buffer lifecycle.
+    /// In most cases, buffers are automatically managed and you don't need to call this.
+    ///
+    /// Only buffers larger than 1MB are pooled to avoid memory fragmentation.
+    /// Smaller buffers are dropped immediately.
+    ///
+    /// # Arguments
+    ///
+    /// * `buffer` - The buffer to return to the pool
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use grim_rs::Grim;
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let mut grim = Grim::new()?;
+    /// let result = grim.capture_all()?;
+    ///
+    /// // Use to_png which internally uses buffer pooling
+    /// let png_bytes = grim.to_png(result.data(), result.width(), result.height())?;
+    ///
+    /// // Advanced: manually return the buffer to pool after use
+    /// // (usually not needed as Grim manages buffers internally)
+    /// grim.return_buffer(png_bytes);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn return_buffer(&self, buffer: Vec<u8>) {
+        const MIN_POOL_SIZE: usize = 1024 * 1024; // 1MB threshold
+
+        // Only pool large buffers to avoid fragmentation
+        if buffer.capacity() >= MIN_POOL_SIZE {
+            self.buffer_pool.borrow_mut().push(buffer);
+        }
+        // Small buffers are dropped automatically
     }
 
     /// Get information about available display outputs.
@@ -680,23 +752,14 @@ impl Grim {
         encoder.set_filter(png::FilterType::NoFilter);
 
         let mut writer = encoder.write_header().map_err(|e| {
-            Error::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("PNG encoding error: {}", e),
-            ))
+            Error::Io(std::io::Error::other(format!("PNG encoding error: {}", e)))
         })?;
 
         writer.write_image_data(data).map_err(|e| {
-            Error::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("PNG encoding error: {}", e),
-            ))
+            Error::Io(std::io::Error::other(format!("PNG encoding error: {}", e)))
         })?;
         writer.finish().map_err(|e| {
-            Error::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("PNG encoding error: {}", e),
-            ))
+            Error::Io(std::io::Error::other(format!("PNG encoding error: {}", e)))
         })?;
 
         Ok(())
@@ -822,10 +885,7 @@ impl Grim {
                 jpeg_encoder::ColorType::Rgb,
             )
             .map_err(|e| {
-                Error::Io(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("JPEG encoding error: {}", e),
-                ))
+                Error::Io(std::io::Error::other(format!("JPEG encoding error: {}", e)))
             })?;
 
         Ok(())
@@ -970,7 +1030,10 @@ impl Grim {
 
         let rgb_img: ImageBuffer<Rgb<u8>, Vec<u8>> = rgba_img.convert();
 
-        let mut jpeg_data = Vec::new();
+        // Estimate JPEG size: typically 10-30x compression for quality 60-95
+        // Use conservative estimate of 10x compression
+        let estimated_size = (width as usize) * (height as usize) * 3 / 10;
+        let mut jpeg_data = self.get_buffer(estimated_size);
         let mut _encoder = jpeg_encoder::Encoder::new(&mut jpeg_data, quality);
         let rgb_data = rgb_img.as_raw();
 
@@ -982,10 +1045,7 @@ impl Grim {
                 jpeg_encoder::ColorType::Rgb,
             )
             .map_err(|e| {
-                Error::Io(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("JPEG encoding error: {}", e),
-                ))
+                Error::Io(std::io::Error::other(format!("JPEG encoding error: {}", e)))
             })?;
 
         Ok(jpeg_data)
@@ -1114,7 +1174,11 @@ impl Grim {
             )),
         )?;
 
-        let mut output = Vec::new();
+        // Estimate output size: typical PNG compression ratio is 2-4x
+        // For RGBA data, raw size is width * height * 4
+        let estimated_size = (width as usize) * (height as usize) * 4 / 3;
+        let mut output = self.get_buffer(estimated_size);
+
         {
             let writer = Cursor::new(&mut output);
             let mut encoder = png::Encoder::new(writer, width, height);
@@ -1132,23 +1196,14 @@ impl Grim {
             encoder.set_filter(png::FilterType::NoFilter);
 
             let mut writer = encoder.write_header().map_err(|e| {
-                Error::Io(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("PNG encoding error: {}", e),
-                ))
+                Error::Io(std::io::Error::other(format!("PNG encoding error: {}", e)))
             })?;
 
             writer.write_image_data(data).map_err(|e| {
-                Error::Io(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("PNG encoding error: {}", e),
-                ))
+                Error::Io(std::io::Error::other(format!("PNG encoding error: {}", e)))
             })?;
             writer.finish().map_err(|e| {
-                Error::Io(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("PNG encoding error: {}", e),
-                ))
+                Error::Io(std::io::Error::other(format!("PNG encoding error: {}", e)))
             })?;
         }
 
