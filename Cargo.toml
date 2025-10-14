@@ -40,6 +40,15 @@ chrono = "0.4"
 env_logger = "0.10"
 regex = "1.10"
 proptest = "1.4"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "capture_benchmarks"
+harness = false
+
+[[bench]]
+name = "encode_benchmarks"
+harness = false
 
 [features]
 default = ["png_support", "jpeg"]

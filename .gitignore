@@ -1,3 +1,10 @@
 /target
 RULES.md
-TODO.md
+
+# Profiling results
+flamegraph.svg
+perf.data
+perf.data.old
+massif.out.*
+heaptrack.*
+target/profiling/
