@@ -60,7 +60,7 @@ fn test_filename_readability() {
     let filename = format!("{}_grim.png", timestamp);
 
     assert!(
-        !filename.chars().all(|c| (c.is_numeric() || c == '.')),
+        !filename.chars().all(|c| c.is_numeric() || c == '.'),
         "Filename looks like a unix timestamp"
     );
 

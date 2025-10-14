@@ -50,7 +50,7 @@ fn apply_output_transform(
 /// This helper function provides proper error handling for mutex locks instead of panicking.
 fn lock_frame_state(
     frame_state: &Arc<Mutex<FrameState>>,
-) -> Result<std::sync::MutexGuard<FrameState>> {
+) -> Result<std::sync::MutexGuard<'_, FrameState>> {
     frame_state
         .lock()
         .map_err(|e| Error::FrameCapture(format!("Frame state mutex poisoned: {}", e)))
@@ -770,7 +770,7 @@ impl WaylandCapture {
 
         let scale_int = scale as u32;
         if scale > 1.0
-            && (scale - scale_int as f64).abs() < 0.01
+            && (scale - (scale_int as f64)).abs() < 0.01
             && scale_int >= 2
             && scale_int <= 4
         {
@@ -837,8 +837,8 @@ impl WaylandCapture {
     ) -> Result<CaptureResult> {
         let old_width = capture.width as usize;
         let old_height = capture.height as usize;
-        let new_width = old_width * factor as usize;
-        let new_height = old_height * factor as usize;
+        let new_width = old_width * (factor as usize);
+        let new_height = old_height * (factor as usize);
 
         let mut new_data = vec![0u8; new_width * new_height * 4];
 
@@ -854,8 +854,8 @@ impl WaylandCapture {
 
                 for dy in 0..factor as usize {
                     for dx in 0..factor as usize {
-                        let new_x = old_x * factor as usize + dx;
-                        let new_y = old_y * factor as usize + dy;
+                        let new_x = old_x * (factor as usize) + dx;
+                        let new_y = old_y * (factor as usize) + dy;
                         let new_idx = (new_y * new_width + new_x) * 4;
 
                         new_data[new_idx..new_idx + 4].copy_from_slice(&pixel);
@@ -1075,10 +1075,10 @@ impl WaylandCapture {
                 (state.width, state.height)
             };
             let mut buffer_data = mmap.to_vec();
-            if let Some(format) = {
+            if let Some(format) = ({
                 let state = lock_frame_state(frame_state)?;
                 state.format
-            } {
+            }) {
                 match format {
                     ShmFormat::Xrgb8888 => {
                         for chunk in buffer_data.chunks_exact_mut(4) {
