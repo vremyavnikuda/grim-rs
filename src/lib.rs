@@ -1121,7 +1121,7 @@ impl Grim {
 
             let compression_level = match compression {
                 0 => png::Compression::Fast,
-                1..=3 => png::Compression::Best,
+                1..=3 => png::Compression::Fast,
                 4..=6 => png::Compression::Default,
                 7..=9 => png::Compression::Best,
                 _ => png::Compression::Default,
