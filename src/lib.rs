@@ -1301,6 +1301,107 @@ impl Grim {
         Ok(ppm_data)
     }
 
+    /// Stream PPM data directly to a writer without intermediate buffering.
+    ///
+    /// This is a zero-copy alternative to [`to_ppm`](Self::to_ppm) that writes PPM data
+    /// directly to any type implementing [`std::io::Write`], performing RGBA→RGB conversion
+    /// on-the-fly without allocating an intermediate buffer.
+    ///
+    /// # Arguments
+    ///
+    /// * `writer` - Any type implementing `Write` (file, stdout, socket, etc.)
+    /// * `data` - Raw RGBA image data (4 bytes per pixel: R, G, B, A)
+    /// * `width` - Width of the image in pixels
+    /// * `height` - Height of the image in pixels
+    ///
+    /// # Performance
+    ///
+    /// This method provides significant performance benefits over `to_ppm()`:
+    /// - **Zero intermediate allocations**: Data flows directly to the writer
+    /// - **Lower memory usage**: No intermediate Vec<u8> created
+    /// - **Reduced copying**: RGBA→RGB conversion happens inline during write
+    /// - **Ideal for large images**: Memory usage is constant regardless of image size
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Writing to the output stream fails
+    /// - Writer cannot accept all data
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use grim_rs::Grim;
+    /// use std::fs::File;
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let mut grim = Grim::new()?;
+    /// let result = grim.capture_all()?;
+    ///
+    /// // Stream directly to file without buffering
+    /// let mut file = File::create("screenshot.ppm")?;
+    /// grim.stream_ppm_to(&mut file, result.data(), result.width(), result.height())?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Example with stdout
+    ///
+    /// ```rust,no_run
+    /// use grim_rs::Grim;
+    /// use std::io;
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let mut grim = Grim::new()?;
+    /// let result = grim.capture_all()?;
+    ///
+    /// // Stream directly to stdout
+    /// let stdout = io::stdout();
+    /// let mut handle = stdout.lock();
+    /// grim.stream_ppm_to(&mut handle, result.data(), result.width(), result.height())?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Example with custom buffer size
+    ///
+    /// ```rust
+    /// use grim_rs::Grim;
+    /// use std::io::BufWriter;
+    /// use std::fs::File;
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let mut grim = Grim::new()?;
+    /// let result = grim.capture_all()?;
+    ///
+    /// // Use BufWriter for custom buffering control
+    /// let file = File::create("screenshot.ppm")?;
+    /// let mut buffered = BufWriter::with_capacity(64 * 1024, file);
+    /// grim.stream_ppm_to(&mut buffered, result.data(), result.width(), result.height())?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn stream_ppm_to<W: std::io::Write>(
+        &self,
+        writer: &mut W,
+        data: &[u8],
+        width: u32,
+        height: u32,
+    ) -> Result<()> {
+        write!(writer, "P6\n{} {}\n255\n", width, height)?;
+
+        let row_size = (width as usize) * 4;
+
+        for row in data.chunks_exact(row_size) {
+            for pixel in row.chunks_exact(4) {
+                writer.write_all(&pixel[0..3])?;
+            }
+        }
+
+        writer.flush()?;
+        Ok(())
+    }
+
     /// Read region from stdin.
     ///
     /// Reads a region specification from standard input in the format "x,y widthxheight".
@@ -1523,12 +1624,9 @@ impl Grim {
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
     pub fn write_ppm_to_stdout(&self, data: &[u8], width: u32, height: u32) -> Result<()> {
-        let ppm_data = self.to_ppm(data, width, height)?;
-        use std::io::Write;
         let stdout = std::io::stdout();
         let mut handle = stdout.lock();
-        handle.write_all(&ppm_data)?;
-        handle.flush()?;
+        self.stream_ppm_to(&mut handle, data, width, height)?;
         Ok(())
     }
 }
@@ -1606,6 +1704,54 @@ mod tests {
         let ppm_data = ppm_result.unwrap();
         assert!(ppm_data.starts_with(b"P6\n2 2\n255\n"));
         assert!(ppm_data.len() >= 12);
+    }
+
+    #[test]
+    fn test_stream_ppm_to() {
+        let grim = Grim::new().unwrap();
+        let test_data = vec![
+            255, 0, 0, 255,
+            0, 255, 0, 255,
+            0, 0, 255, 255,
+            128, 128, 128, 255,
+        ];
+
+        let mut output = Vec::new();
+        let result = grim.stream_ppm_to(&mut output, &test_data, 2, 2);
+        assert!(result.is_ok());
+
+        assert!(output.starts_with(b"P6\n2 2\n255\n"));
+
+        let header_end = output.iter().position(|&b| b == b'\n')
+            .and_then(|pos| output[pos + 1..].iter().position(|&b| b == b'\n').map(|p| pos + 1 + p))
+            .and_then(|pos| output[pos + 1..].iter().position(|&b| b == b'\n').map(|p| pos + 1 + p))
+            .unwrap() + 1;
+
+        let rgb_data = &output[header_end..];
+        assert_eq!(rgb_data.len(), 12);
+
+        assert_eq!(&rgb_data[0..3], &[255, 0, 0]);
+        assert_eq!(&rgb_data[3..6], &[0, 255, 0]);
+        assert_eq!(&rgb_data[6..9], &[0, 0, 255]);
+        assert_eq!(&rgb_data[9..12], &[128, 128, 128]);
+    }
+
+    #[test]
+    fn test_stream_ppm_vs_to_ppm() {
+        let grim = Grim::new().unwrap();
+        let test_data = vec![
+            100, 150, 200, 255,
+            50, 75, 100, 128,
+            200, 100, 50, 64,
+            25, 50, 75, 255,
+        ];
+
+        let buffered_output = grim.to_ppm(&test_data, 2, 2).unwrap();
+
+        let mut streamed_output = Vec::new();
+        grim.stream_ppm_to(&mut streamed_output, &test_data, 2, 2).unwrap();
+
+        assert_eq!(buffered_output, streamed_output);
     }
 
     #[test]
