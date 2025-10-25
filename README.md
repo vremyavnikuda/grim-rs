@@ -1,5 +1,6 @@
 # grim-rs
 [![Crates.io Version](https://img.shields.io/crates/v/grim-rs.svg)](https://crates.io/crates/grim-rs)
+>if you like this project, then the best way to express gratitude is to give it a star ⭐, it doesn't cost you anything, but I understand that I'm moving the project in the right direction.
 
 Rust implementation of `grim-rs` screenshot utility for Wayland compositors.
 
