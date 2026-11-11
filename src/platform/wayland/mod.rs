@@ -61,6 +61,7 @@ pub(super) struct FrameState {
     flags: u32,
     linux_dmabuf_received: bool,
     constraints_done: bool,
+    failure: Option<String>,
 }
 
 /// Safely lock a FrameState mutex, converting poisoned mutex errors to Result.

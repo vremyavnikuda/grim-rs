@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **PNG compression levels 1–3 requested maximum compression instead of fast**: Levels 1–3 of the 0–9 scale mapped to `png::Compression::Best`, producing output identical to levels 7–9 and turning "fast, weak compression" into the slowest option. Levels are now quantized monotonically onto the three modes the `png` crate exposes (the `Huffman`/`Rle` variants are deprecated since 0.17.6): 0–2 fast, 3–6 default, 7–9 best. Default level 6 is unchanged. Measured on a 5360×1440 capture: level 0 yields 30.6 MB, level 9 — 706 KB.
 - **JPEG encoding silently corrupted images wider or taller than 65535 px**: The JPEG header stores dimensions as `u16`, so oversized captures were written with wrapped dimensions and an unreadable file. `save_jpeg`, `save_jpeg_with_quality`, `to_jpeg`, and `to_jpeg_with_quality` now reject such sizes with a `DimensionMismatch` error before any encoding work.
+- **ext-image-copy-capture returned a blank image when the compositor aborted the capture**: Both failure signals — `stopped` on the capture session (screen lock, revoked permission) and `failed` on the frame — only set the ready flag, and since the pixel buffer is allocated up front, the capture completed "successfully" with an all-zero image. Both paths now surface a `FrameCapture` error with the reason, in single-output, region, and multi-output captures.
 
 ### Changed
 

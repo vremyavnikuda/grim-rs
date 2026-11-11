@@ -505,6 +505,7 @@ impl Dispatch<ExtImageCopyCaptureSessionV1, Arc<Mutex<FrameState>>> for WaylandC
             Event::Stopped => {
                 log::warn!("Capture session stopped by compositor");
                 s.ready = true;
+                s.failure = Some("capture session stopped by compositor".to_string());
             }
             _ => {}
         }
@@ -536,6 +537,7 @@ impl Dispatch<ExtImageCopyCaptureFrameV1, Arc<Mutex<FrameState>>> for WaylandCap
             Event::Failed { reason } => {
                 log::error!("Capture frame failed: reason={:?}", reason);
                 s.ready = true;
+                s.failure = Some(format!("capture frame failed: {reason:?}"));
                 frame.destroy();
             }
             _ => {}

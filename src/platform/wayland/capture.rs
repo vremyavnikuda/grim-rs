@@ -99,6 +99,7 @@ impl WaylandCapture {
             flags: 0,
             linux_dmabuf_received: false,
             constraints_done: false,
+            failure: None,
         }));
         let frame = screencopy_manager.capture_output_region(
             if overlay_cursor { 1 } else { 0 },
@@ -271,6 +272,7 @@ impl WaylandCapture {
             flags: 0,
             linux_dmabuf_received: false,
             constraints_done: false,
+            failure: None,
         }));
         let source = source_manager.create_source(output, &qh, ());
         let mut options = ExtCopyOptions::empty();
@@ -282,6 +284,9 @@ impl WaylandCapture {
         loop {
             {
                 let state = lock_frame_state(&frame_state)?;
+                if let Some(failure) = &state.failure {
+                    return Err(Error::FrameCapture(failure.clone()));
+                }
                 if state.constraints_done {
                     break;
                 }
@@ -351,12 +356,10 @@ impl WaylandCapture {
         loop {
             {
                 let state = lock_frame_state(&frame_state)?;
+                if let Some(failure) = &state.failure {
+                    return Err(Error::FrameCapture(failure.clone()));
+                }
                 if state.ready {
-                    if state.buffer.is_none() {
-                        return Err(Error::FrameCapture(
-                            "Frame is ready but buffer was not received".to_string(),
-                        ));
-                    }
                     break;
                 }
             }
@@ -636,6 +639,7 @@ impl WaylandCapture {
                 flags: 0,
                 linux_dmabuf_received: false,
                 constraints_done: false,
+                failure: None,
             }));
             let frame = screencopy_manager.capture_output_region(
                 if param.overlay_cursor_enabled() { 1 } else { 0 },
