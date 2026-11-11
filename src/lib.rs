@@ -923,7 +923,7 @@ impl Grim {
             ))
         })?;
         let mut rgb_data = vec![0u8; rgb_len];
-        for (i, rgba) in data.chunks_exact(4).enumerate() {
+        for (i, rgba) in data.as_chunks::<4>().0.iter().enumerate() {
             let base = i * 3;
             rgb_data[base] = rgba[0];
             rgb_data[base + 1] = rgba[1];
@@ -1106,7 +1106,7 @@ impl Grim {
             ))
         })?;
         let mut rgb_data = vec![0u8; rgb_len];
-        for (i, rgba) in data.chunks_exact(4).enumerate() {
+        for (i, rgba) in data.as_chunks::<4>().0.iter().enumerate() {
             let base = i * 3;
             rgb_data[base] = rgba[0];
             rgb_data[base + 1] = rgba[1];
@@ -1463,7 +1463,7 @@ impl Grim {
     /// Returns an error if:
     /// - Failed to write to stdout
     /// - Image processing failed
-    /// - JPEG support is not enabledvidence: lib.rs Symbol: to_png_with_compression
+    /// - JPEG support is not enabled
     ///
     /// # Example
     ///
