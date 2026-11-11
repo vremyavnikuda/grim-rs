@@ -131,6 +131,47 @@ fn test_png_compression_levels() {
 }
 
 #[test]
+fn test_png_compression_level_mapping() {
+    // Gradient mixed with LCG noise: compressible, but not trivially.
+    let w = 128u32;
+    let h = 128u32;
+    let mut data = vec![0u8; (w * h * 4) as usize];
+    let mut state = 0x1234_5678u32;
+    for (i, px) in data.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+        let x = i as u32 % w;
+        let y = i as u32 / w;
+        state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        let noise = (state >> 24) as u8;
+        px[0] = (x * 2) as u8 ^ (noise & 0x0f);
+        px[1] = (y * 2) as u8 ^ (noise & 0x0f);
+        px[2] = (x + y) as u8 | (noise & 0x30);
+        px[3] = 255;
+    }
+    if let Ok(grim) = Grim::new() {
+        let mut sizes = [0usize; 10];
+        for (level, size) in sizes.iter_mut().enumerate() {
+            let png = grim
+                .to_png_with_compression(&data, w, h, level as u8)
+                .unwrap();
+            assert!(
+                png.starts_with(&[137, 80, 78, 71, 13, 10, 26, 10]),
+                "level {level}: invalid PNG signature"
+            );
+            *size = png.len();
+        }
+        // Compression effort grows monotonically with the level.
+        assert!(
+            sizes[9] < sizes[0],
+            "level 9 ({} bytes) should compress better than level 0 ({} bytes)",
+            sizes[9],
+            sizes[0]
+        );
+        assert!(sizes[6] <= sizes[3]);
+        assert!(sizes[3] <= sizes[0]);
+    }
+}
+
+#[test]
 fn test_capture_parameters_default_behavior() {
     let params = CaptureParameters::new("test");
     assert_eq!(params.output_name(), "test");
@@ -470,6 +511,21 @@ fn test_to_jpeg() {
     let test_data = vec![255u8; 64];
     let jpeg_data = grim.to_jpeg(&test_data, 4, 4).unwrap();
     assert!(!jpeg_data.is_empty());
+}
+
+#[test]
+#[cfg(feature = "jpeg")]
+fn test_jpeg_rejects_dimensions_over_u16() {
+    if let Ok(grim) = Grim::new() {
+        // JPEG headers store dimensions as u16; larger images must error
+        // out instead of silently truncating.
+        let too_wide = vec![0u8; 65536 * 4];
+        assert!(grim.to_jpeg(&too_wide, 65536, 1).is_err());
+        let too_tall = vec![0u8; 65536 * 4];
+        assert!(grim.to_jpeg(&too_tall, 1, 65536).is_err());
+        let boundary = vec![0u8; 4];
+        assert!(grim.to_jpeg(&boundary, 1, 1).is_ok());
+    }
 }
 
 #[test]
