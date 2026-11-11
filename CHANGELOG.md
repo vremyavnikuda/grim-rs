@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Dependency updates**: Bumped `crossbeam-epoch` to v0.9.20, `quick-xml` to v0.41 (via `wayland-scanner` v0.31.11), `anyhow` to v1.0.104, `memmap2` to v0.9.12, `rand` to v0.8.8/v0.9.5 — clears all `cargo audit` vulnerabilities (RUSTSEC-2026-0204, RUSTSEC-2026-0194, RUSTSEC-2026-0195) and unsound warnings. Lockfile-only; the one remaining advisory (`paste` unmaintained) has no fix and does not fail CI.
 - **Replaced deprecated iterator idioms**: `chunks_exact(4)`/`chunks_exact_mut(4)` swapped for `as_chunks::<4>()`/`as_chunks_mut::<4>()` in the RGBA→RGB conversion and pixel format swizzling. Resolves the `chunks_exact_to_as_chunks` lint that fails the clippy CI job (`-D warnings`) on current stable toolchains.
 - **Documentation cleanup**: removed stray text accidentally embedded in the `write_jpeg_to_stdout_with_quality` doc comment.
 
