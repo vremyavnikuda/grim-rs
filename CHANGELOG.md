@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] 2026-11-11
+
+### Fixed
+
+- **PNG compression levels 1–3 requested maximum compression instead of fast**: Levels 1–3 of the 0–9 scale mapped to `png::Compression::Best`, producing output identical to levels 7–9 and turning "fast, weak compression" into the slowest option. Levels are now quantized monotonically onto the three modes the `png` crate exposes (the `Huffman`/`Rle` variants are deprecated since 0.17.6): 0–2 fast, 3–6 default, 7–9 best. Default level 6 is unchanged. Measured on a 5360×1440 capture: level 0 yields 30.6 MB, level 9 — 706 KB.
+- **JPEG encoding silently corrupted images wider or taller than 65535 px**: The JPEG header stores dimensions as `u16`, so oversized captures were written with wrapped dimensions and an unreadable file. `save_jpeg`, `save_jpeg_with_quality`, `to_jpeg`, and `to_jpeg_with_quality` now reject such sizes with a `DimensionMismatch` error before any encoding work.
+
+### Changed
+
+- **Replaced deprecated iterator idioms**: `chunks_exact(4)`/`chunks_exact_mut(4)` swapped for `as_chunks::<4>()`/`as_chunks_mut::<4>()` in the RGBA→RGB conversion and pixel format swizzling. Resolves the `chunks_exact_to_as_chunks` lint that fails the clippy CI job (`-D warnings`) on current stable toolchains.
+- **Documentation cleanup**: removed stray text accidentally embedded in the `write_jpeg_to_stdout_with_quality` doc comment.
+
 ## [0.2.0] 2026-06-11
 
 ### Added
