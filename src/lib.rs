@@ -54,6 +54,18 @@ pub use transform::{apply_image_transform, rotate_180, rotate_270, rotate_90, Ou
 
 use platform::Platform;
 
+/// Map a 0-9 compression level onto the `png` crate's settings.
+///
+/// The `png` crate exposes only three compression modes, so the ten levels
+/// are quantized: 0-2 fast, 3-6 default, 7-9 best.
+fn png_compression_level(level: u8) -> png::Compression {
+    match level {
+        0..=2 => png::Compression::Fast,
+        3..=6 => png::Compression::Default,
+        _ => png::Compression::Best,
+    }
+}
+
 /// Result of a screenshot capture operation.
 ///
 /// Contains the raw image data and dimensions of the captured area.
@@ -773,13 +785,7 @@ impl Grim {
         let writer = BufWriter::new(file);
         let mut encoder = png::Encoder::new(writer, width, height);
 
-        let compression_level = match compression {
-            0 => png::Compression::Fast,
-            1..=3 => png::Compression::Best,
-            4..=6 => png::Compression::Default,
-            7..=9 => png::Compression::Best,
-            _ => png::Compression::Default,
-        };
+        let compression_level = png_compression_level(compression);
         encoder.set_compression(compression_level);
 
         encoder.set_color(png::ColorType::Rgba);
@@ -914,6 +920,13 @@ impl Grim {
                 ),
             )));
         }
+        if width > u16::MAX as u32 || height > u16::MAX as u32 {
+            return Err(Error::ImageProcessing(image::ImageError::Parameter(
+                image::error::ParameterError::from_kind(
+                    image::error::ParameterErrorKind::DimensionMismatch,
+                ),
+            )));
+        }
         let pixels = expected as usize / 4;
         let rgb_len = pixels.checked_mul(3).ok_or_else(|| {
             Error::ImageProcessing(image::ImageError::Parameter(
@@ -923,7 +936,7 @@ impl Grim {
             ))
         })?;
         let mut rgb_data = vec![0u8; rgb_len];
-        for (i, rgba) in data.chunks_exact(4).enumerate() {
+        for (i, rgba) in data.as_chunks::<4>().0.iter().enumerate() {
             let base = i * 3;
             rgb_data[base] = rgba[0];
             rgb_data[base + 1] = rgba[1];
@@ -1097,6 +1110,13 @@ impl Grim {
                 ),
             )));
         }
+        if width > u16::MAX as u32 || height > u16::MAX as u32 {
+            return Err(Error::ImageProcessing(image::ImageError::Parameter(
+                image::error::ParameterError::from_kind(
+                    image::error::ParameterErrorKind::DimensionMismatch,
+                ),
+            )));
+        }
         let pixels = expected as usize / 4;
         let rgb_len = pixels.checked_mul(3).ok_or_else(|| {
             Error::ImageProcessing(image::ImageError::Parameter(
@@ -1106,7 +1126,7 @@ impl Grim {
             ))
         })?;
         let mut rgb_data = vec![0u8; rgb_len];
-        for (i, rgba) in data.chunks_exact(4).enumerate() {
+        for (i, rgba) in data.as_chunks::<4>().0.iter().enumerate() {
             let base = i * 3;
             rgb_data[base] = rgba[0];
             rgb_data[base + 1] = rgba[1];
@@ -1270,13 +1290,7 @@ impl Grim {
             let writer = Cursor::new(&mut output);
             let mut encoder = png::Encoder::new(writer, width, height);
 
-            let compression_level = match compression {
-                0 => png::Compression::Fast,
-                1..=3 => png::Compression::Best,
-                4..=6 => png::Compression::Default,
-                7..=9 => png::Compression::Best,
-                _ => png::Compression::Default,
-            };
+            let compression_level = png_compression_level(compression);
             encoder.set_compression(compression_level);
 
             encoder.set_color(png::ColorType::Rgba);
@@ -1463,7 +1477,7 @@ impl Grim {
     /// Returns an error if:
     /// - Failed to write to stdout
     /// - Image processing failed
-    /// - JPEG support is not enabledvidence: lib.rs Symbol: to_png_with_compression
+    /// - JPEG support is not enabled
     ///
     /// # Example
     ///
