@@ -1463,7 +1463,7 @@ impl Grim {
     /// Returns an error if:
     /// - Failed to write to stdout
     /// - Image processing failed
-    /// - JPEG support is not enabledvidence: lib.rs Symbol: to_png_with_compression
+    /// - JPEG support is not enabled
     ///
     /// # Example
     ///
