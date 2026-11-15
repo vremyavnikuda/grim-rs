@@ -517,14 +517,18 @@ impl WaylandCapture {
         let (_, first_info) = &snapshot[0];
         let mut min_x = first_info.logical_x;
         let mut min_y = first_info.logical_y;
-        let mut max_x = first_info.logical_x + first_info.logical_width;
-        let mut max_y = first_info.logical_y + first_info.logical_height;
+        let mut max_x = first_info
+            .logical_x
+            .saturating_add(first_info.logical_width);
+        let mut max_y = first_info
+            .logical_y
+            .saturating_add(first_info.logical_height);
 
         for (_, info) in &snapshot {
             min_x = min_x.min(info.logical_x);
             min_y = min_y.min(info.logical_y);
-            max_x = max_x.max(info.logical_x + info.logical_width);
-            max_y = max_y.max(info.logical_y + info.logical_height);
+            max_x = max_x.max(info.logical_x.saturating_add(info.logical_width));
+            max_y = max_y.max(info.logical_y.saturating_add(info.logical_height));
         }
 
         let region = Region::new(min_x, min_y, max_x - min_x, max_y - min_y);
@@ -619,8 +623,8 @@ impl WaylandCapture {
                 let output_bottom = output_info.logical_height;
                 if region.x() < 0
                     || region.y() < 0
-                    || region.x() + region.width() > output_right
-                    || region.y() + region.height() > output_bottom
+                    || region.right() > output_right
+                    || region.bottom() > output_bottom
                 {
                     return Err(Error::InvalidRegion(
                         "Capture region extends outside output boundaries".to_string(),
@@ -869,8 +873,8 @@ impl WaylandCapture {
                 let output_bottom = output_info.logical_height;
                 if region.x() < 0
                     || region.y() < 0
-                    || region.x() + region.width() > output_right
-                    || region.y() + region.height() > output_bottom
+                    || region.right() > output_right
+                    || region.bottom() > output_bottom
                 {
                     return Err(Error::InvalidRegion(
                         "Capture region extends outside output boundaries".to_string(),

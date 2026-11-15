@@ -7,7 +7,6 @@ pub(super) use std::sync::{Arc, Mutex};
 pub(super) use wayland_client::{
     protocol::{
         wl_buffer::WlBuffer,
-        wl_compositor::WlCompositor,
         wl_output::WlOutput,
         wl_registry::WlRegistry,
         wl_shm::{Format as ShmFormat, WlShm},
@@ -150,7 +149,6 @@ pub(super) struct OutputInfo {
 }
 
 pub(super) struct WaylandGlobals {
-    compositor: Option<WlCompositor>,
     shm: Option<WlShm>,
     screencopy_manager: Option<ZwlrScreencopyManagerV1>,
     ext_source_manager: Option<ExtOutputImageCaptureSourceManagerV1>,
@@ -183,7 +181,6 @@ impl WaylandCapture {
             Error::WaylandConnection(format!("Failed to connect to Wayland: {}", e))
         })?;
         let globals = WaylandGlobals {
-            compositor: None,
             shm: None,
             screencopy_manager: None,
             ext_source_manager: None,

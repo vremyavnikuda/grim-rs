@@ -2,6 +2,7 @@
 name = "grim-rs"
 version = "0.2.0"
 edition = "2021"
+rust-version = "1.82"
 description = "Rust implementation of grim screenshot utility for Wayland and Windows"
 license-file = "LICENSE"
 keywords = ["wayland", "screenshot", "grim", "windows", "dxgi"]
@@ -22,7 +23,7 @@ name = "grim-rs"
 path = "src/bin/grim.rs"
 
 [dependencies]
-image = { version = "0.25.8", features = ["png"] }
+image = { version = "0.25.8", default-features = false }
 jpeg-encoder = { version = "0.7.0", optional = true }
 png = { version = "0.17.0", optional = true }
 thiserror = "2.0.18"
@@ -69,4 +70,4 @@ harness = false
 [features]
 default = ["png_support", "jpeg"]
 png_support = ["png"]
-jpeg = ["image/jpeg", "jpeg-encoder", "png_support"]
+jpeg = ["jpeg-encoder", "png_support"]

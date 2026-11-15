@@ -27,6 +27,9 @@ pub fn fourcc_to_format(fourcc: u32) -> Option<PixelFormat> {
 ///
 /// Conversion is done in-place on the slice. Unrecognized formats are left
 /// unchanged.
+// as_chunks requires Rust 1.88 while the crate MSRV is 1.82; kept over
+// chunks_exact to satisfy the chunks_exact_to_as_chunks lint.
+#[allow(clippy::incompatible_msrv)]
 pub fn convert_to_rgba(data: &mut [u8], format: PixelFormat) {
     match format {
         PixelFormat::Xrgb8888 => {

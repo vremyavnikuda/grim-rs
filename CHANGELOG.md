@@ -5,19 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.1] 2026-11-11
+## [0.2.1] 2026-11-16
 
 ### Fixed
 
 - **PNG compression levels 1–3 requested maximum compression instead of fast**: Levels 1–3 of the 0–9 scale mapped to `png::Compression::Best`, producing output identical to levels 7–9 and turning "fast, weak compression" into the slowest option. Levels are now quantized monotonically onto the three modes the `png` crate exposes (the `Huffman`/`Rle` variants are deprecated since 0.17.6): 0–2 fast, 3–6 default, 7–9 best. Default level 6 is unchanged. Measured on a 5360×1440 capture: level 0 yields 30.6 MB, level 9 — 706 KB.
 - **JPEG encoding silently corrupted images wider or taller than 65535 px**: The JPEG header stores dimensions as `u16`, so oversized captures were written with wrapped dimensions and an unreadable file. `save_jpeg`, `save_jpeg_with_quality`, `to_jpeg`, and `to_jpeg_with_quality` now reject such sizes with a `DimensionMismatch` error before any encoding work.
 - **ext-image-copy-capture returned a blank image when the compositor aborted the capture**: Both failure signals — `stopped` on the capture session (screen lock, revoked permission) and `failed` on the frame — only set the ready flag, and since the pixel buffer is allocated up front, the capture completed "successfully" with an all-zero image. Both paths now surface a `FrameCapture` error with the reason, in single-output, region, and multi-output captures.
+- **Region bounds overflow with extreme geometry**: boundary computations (`x + width`, `y + height`) in `Region::intersects`/`intersection` and the Wayland capture path used plain `i32` addition — a panic in debug builds and silent wraparound in release for values near `i32::MAX`, reachable through extreme CLI `-g` arguments. Bounds are now computed with saturating arithmetic, and an extremal-values property test guards the fix.
 
 ### Changed
 
 - **Dependency updates**: Bumped `crossbeam-epoch` to v0.9.20, `quick-xml` to v0.41 (via `wayland-scanner` v0.31.11), `anyhow` to v1.0.104, `memmap2` to v0.9.12, `rand` to v0.8.8/v0.9.5 — clears all `cargo audit` vulnerabilities (RUSTSEC-2026-0204, RUSTSEC-2026-0194, RUSTSEC-2026-0195) and unsound warnings. Lockfile-only; the one remaining advisory (`paste` unmaintained) has no fix and does not fail CI.
 - **Replaced deprecated iterator idioms**: `chunks_exact(4)`/`chunks_exact_mut(4)` swapped for `as_chunks::<4>()`/`as_chunks_mut::<4>()` in the RGBA→RGB conversion and pixel format swizzling. Resolves the `chunks_exact_to_as_chunks` lint that fails the clippy CI job (`-D warnings`) on current stable toolchains.
 - **Documentation cleanup**: removed stray text accidentally embedded in the `write_jpeg_to_stdout_with_quality` doc comment.
+- **MSRV**: Minimum supported Rust version is now 1.82 (was 1.68). The codebase already relied on 1.82 APIs (`Option::is_none_or`); `rust-version` is now declared in `Cargo.toml` and enforced by a CI job.
+- **Leaner dependency tree**: the `image` crate is now built with `default-features = false` — only the parts used for scaling and error types are compiled. This drops 70 transitive crates (AVIF/WebP/TIFF codecs and their native dependencies) from the lockfile and noticeably speeds up fresh builds. No API or behavior change; the `jpeg` feature still produces the same JPEG output via `jpeg-encoder`.
 
 ## [0.2.0] 2026-06-11
 

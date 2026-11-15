@@ -35,7 +35,7 @@ cargo add grim-rs
 grim-rs = "0.2"
 ```
 
-**MSRV:** Rust 1.68+
+**MSRV:** Rust 1.82+
 
 ```rust,no_run
 use grim_rs::Grim;

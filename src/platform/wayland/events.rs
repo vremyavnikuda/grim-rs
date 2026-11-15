@@ -18,10 +18,6 @@ impl Dispatch<WlRegistry, ()> for WaylandCapture {
         } = event
         {
             match interface.as_str() {
-                "wl_compositor" => {
-                    state.globals.compositor =
-                        Some(registry.bind::<WlCompositor, _, _>(name, version, qh, ()));
-                }
                 "wl_shm" => {
                     state.globals.shm = Some(registry.bind::<WlShm, _, _>(name, version, qh, ()));
                 }
@@ -170,18 +166,6 @@ impl Dispatch<WlOutput, ()> for WaylandCapture {
             }
             _ => {}
         }
-    }
-}
-
-impl Dispatch<WlCompositor, ()> for WaylandCapture {
-    fn event(
-        _state: &mut Self,
-        _proxy: &WlCompositor,
-        _event: <WlCompositor as Proxy>::Event,
-        _data: &(),
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
-    ) {
     }
 }
 

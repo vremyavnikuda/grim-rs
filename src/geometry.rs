@@ -38,6 +38,14 @@ impl Region {
         self.width <= 0 || self.height <= 0
     }
 
+    pub(crate) fn right(&self) -> i32 {
+        self.x.saturating_add(self.width)
+    }
+
+    pub(crate) fn bottom(&self) -> i32 {
+        self.y.saturating_add(self.height)
+    }
+
     pub fn intersects(&self, other: &Region) -> bool {
         if self.is_empty() || other.is_empty() {
             return false;
@@ -45,8 +53,8 @@ impl Region {
 
         let x1 = self.x.max(other.x);
         let y1 = self.y.max(other.y);
-        let x2 = (self.x + self.width).min(other.x + other.width);
-        let y2 = (self.y + self.height).min(other.y + other.height);
+        let x2 = self.right().min(other.right());
+        let y2 = self.bottom().min(other.bottom());
 
         x2 > x1 && y2 > y1
     }
@@ -58,8 +66,8 @@ impl Region {
 
         let x1 = self.x.max(other.x);
         let y1 = self.y.max(other.y);
-        let x2 = (self.x + self.width).min(other.x + other.width);
-        let y2 = (self.y + self.height).min(other.y + other.height);
+        let x2 = self.right().min(other.right());
+        let y2 = self.bottom().min(other.bottom());
 
         Some(Region::new(x1, y1, x2 - x1, y2 - y1))
     }

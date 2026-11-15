@@ -66,6 +66,46 @@ fn png_compression_level(level: u8) -> png::Compression {
     }
 }
 
+fn dimension_mismatch() -> Error {
+    Error::ImageProcessing(image::ImageError::Parameter(
+        image::error::ParameterError::from_kind(
+            image::error::ParameterErrorKind::DimensionMismatch,
+        ),
+    ))
+}
+
+/// Validate that `data` holds exactly `width`×`height` RGBA pixels.
+fn validate_rgba(data: &[u8], width: u32, height: u32) -> Result<()> {
+    let pixels = u64::from(width) * u64::from(height);
+    let expected = pixels.checked_mul(4).ok_or_else(dimension_mismatch)?;
+    if expected > usize::MAX as u64 || data.len() != expected as usize {
+        return Err(dimension_mismatch());
+    }
+    Ok(())
+}
+
+/// JPEG stores dimensions as u16 in its header; larger sizes would wrap.
+fn validate_jpeg_dimensions(width: u32, height: u32) -> Result<()> {
+    if width > u16::MAX as u32 || height > u16::MAX as u32 {
+        return Err(dimension_mismatch());
+    }
+    Ok(())
+}
+
+#[allow(clippy::incompatible_msrv)] // as_chunks requires Rust 1.88, crate MSRV is 1.82
+fn rgba_to_rgb(data: &[u8]) -> Result<Vec<u8>> {
+    let pixels = data.len() / 4;
+    let rgb_len = pixels.checked_mul(3).ok_or_else(dimension_mismatch)?;
+    let mut rgb_data = vec![0u8; rgb_len];
+    for (i, rgba) in data.as_chunks::<4>().0.iter().enumerate() {
+        let base = i * 3;
+        rgb_data[base] = rgba[0];
+        rgb_data[base + 1] = rgba[1];
+        rgb_data[base + 2] = rgba[2];
+    }
+    Ok(rgb_data)
+}
+
 /// Result of a screenshot capture operation.
 ///
 /// Contains the raw image data and dimensions of the captured area.
@@ -755,28 +795,7 @@ impl Grim {
     ) -> Result<()> {
         use std::io::BufWriter;
 
-        let pixels = u64::from(width) * u64::from(height);
-        let expected = pixels.checked_mul(4).ok_or_else(|| {
-            Error::ImageProcessing(image::ImageError::Parameter(
-                image::error::ParameterError::from_kind(
-                    image::error::ParameterErrorKind::DimensionMismatch,
-                ),
-            ))
-        })?;
-        if expected > usize::MAX as u64 {
-            return Err(Error::ImageProcessing(image::ImageError::Parameter(
-                image::error::ParameterError::from_kind(
-                    image::error::ParameterErrorKind::DimensionMismatch,
-                ),
-            )));
-        }
-        if data.len() != expected as usize {
-            return Err(Error::ImageProcessing(image::ImageError::Parameter(
-                image::error::ParameterError::from_kind(
-                    image::error::ParameterErrorKind::DimensionMismatch,
-                ),
-            )));
-        }
+        validate_rgba(data, width, height)?;
 
         let file = std::fs::File::create(&path).map_err(|e| Error::IoWithContext {
             operation: format!("creating output file '{}'", path.as_ref().display()),
@@ -898,50 +917,9 @@ impl Grim {
         path: P,
         quality: u8,
     ) -> Result<()> {
-        let pixels = u64::from(width) * u64::from(height);
-        let expected = pixels.checked_mul(4).ok_or_else(|| {
-            Error::ImageProcessing(image::ImageError::Parameter(
-                image::error::ParameterError::from_kind(
-                    image::error::ParameterErrorKind::DimensionMismatch,
-                ),
-            ))
-        })?;
-        if expected > usize::MAX as u64 {
-            return Err(Error::ImageProcessing(image::ImageError::Parameter(
-                image::error::ParameterError::from_kind(
-                    image::error::ParameterErrorKind::DimensionMismatch,
-                ),
-            )));
-        }
-        if data.len() != expected as usize {
-            return Err(Error::ImageProcessing(image::ImageError::Parameter(
-                image::error::ParameterError::from_kind(
-                    image::error::ParameterErrorKind::DimensionMismatch,
-                ),
-            )));
-        }
-        if width > u16::MAX as u32 || height > u16::MAX as u32 {
-            return Err(Error::ImageProcessing(image::ImageError::Parameter(
-                image::error::ParameterError::from_kind(
-                    image::error::ParameterErrorKind::DimensionMismatch,
-                ),
-            )));
-        }
-        let pixels = expected as usize / 4;
-        let rgb_len = pixels.checked_mul(3).ok_or_else(|| {
-            Error::ImageProcessing(image::ImageError::Parameter(
-                image::error::ParameterError::from_kind(
-                    image::error::ParameterErrorKind::DimensionMismatch,
-                ),
-            ))
-        })?;
-        let mut rgb_data = vec![0u8; rgb_len];
-        for (i, rgba) in data.as_chunks::<4>().0.iter().enumerate() {
-            let base = i * 3;
-            rgb_data[base] = rgba[0];
-            rgb_data[base + 1] = rgba[1];
-            rgb_data[base + 2] = rgba[2];
-        }
+        validate_rgba(data, width, height)?;
+        validate_jpeg_dimensions(width, height)?;
+        let rgb_data = rgba_to_rgb(data)?;
 
         let mut output_file = std::fs::File::create(&path).map_err(|e| Error::IoWithContext {
             operation: format!("creating output file '{}'", path.as_ref().display()),
@@ -1088,50 +1066,9 @@ impl Grim {
         height: u32,
         quality: u8,
     ) -> Result<Vec<u8>> {
-        let pixels = u64::from(width) * u64::from(height);
-        let expected = pixels.checked_mul(4).ok_or_else(|| {
-            Error::ImageProcessing(image::ImageError::Parameter(
-                image::error::ParameterError::from_kind(
-                    image::error::ParameterErrorKind::DimensionMismatch,
-                ),
-            ))
-        })?;
-        if expected > usize::MAX as u64 {
-            return Err(Error::ImageProcessing(image::ImageError::Parameter(
-                image::error::ParameterError::from_kind(
-                    image::error::ParameterErrorKind::DimensionMismatch,
-                ),
-            )));
-        }
-        if data.len() != expected as usize {
-            return Err(Error::ImageProcessing(image::ImageError::Parameter(
-                image::error::ParameterError::from_kind(
-                    image::error::ParameterErrorKind::DimensionMismatch,
-                ),
-            )));
-        }
-        if width > u16::MAX as u32 || height > u16::MAX as u32 {
-            return Err(Error::ImageProcessing(image::ImageError::Parameter(
-                image::error::ParameterError::from_kind(
-                    image::error::ParameterErrorKind::DimensionMismatch,
-                ),
-            )));
-        }
-        let pixels = expected as usize / 4;
-        let rgb_len = pixels.checked_mul(3).ok_or_else(|| {
-            Error::ImageProcessing(image::ImageError::Parameter(
-                image::error::ParameterError::from_kind(
-                    image::error::ParameterErrorKind::DimensionMismatch,
-                ),
-            ))
-        })?;
-        let mut rgb_data = vec![0u8; rgb_len];
-        for (i, rgba) in data.as_chunks::<4>().0.iter().enumerate() {
-            let base = i * 3;
-            rgb_data[base] = rgba[0];
-            rgb_data[base + 1] = rgba[1];
-            rgb_data[base + 2] = rgba[2];
-        }
+        validate_rgba(data, width, height)?;
+        validate_jpeg_dimensions(width, height)?;
+        let rgb_data = rgba_to_rgb(data)?;
 
         let mut jpeg_data = Vec::new();
         let mut _encoder = jpeg_encoder::Encoder::new(&mut jpeg_data, quality);
@@ -1262,28 +1199,7 @@ impl Grim {
     ) -> Result<Vec<u8>> {
         use std::io::Cursor;
 
-        let pixels = u64::from(width) * u64::from(height);
-        let expected = pixels.checked_mul(4).ok_or_else(|| {
-            Error::ImageProcessing(image::ImageError::Parameter(
-                image::error::ParameterError::from_kind(
-                    image::error::ParameterErrorKind::DimensionMismatch,
-                ),
-            ))
-        })?;
-        if expected > usize::MAX as u64 {
-            return Err(Error::ImageProcessing(image::ImageError::Parameter(
-                image::error::ParameterError::from_kind(
-                    image::error::ParameterErrorKind::DimensionMismatch,
-                ),
-            )));
-        }
-        if data.len() != expected as usize {
-            return Err(Error::ImageProcessing(image::ImageError::Parameter(
-                image::error::ParameterError::from_kind(
-                    image::error::ParameterErrorKind::DimensionMismatch,
-                ),
-            )));
-        }
+        validate_rgba(data, width, height)?;
 
         let mut output = Vec::new();
         {
