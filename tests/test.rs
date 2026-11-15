@@ -117,6 +117,7 @@ fn test_convert_argb8888_to_rgba_preserves_alpha() {
     assert_eq!(pixel_data, vec![30, 20, 10, 40]);
 }
 
+#[cfg(feature = "png_support")]
 #[test]
 fn test_png_compression_levels() {
     let test_data = vec![255u8; 100 * 100 * 4]; // 100x100 image
@@ -128,6 +129,7 @@ fn test_png_compression_levels() {
     }
 }
 
+#[cfg(feature = "png_support")]
 #[test]
 #[allow(clippy::chunks_exact_to_as_chunks)] // as_chunks needs Rust 1.88; crate MSRV is 1.82
 fn test_png_compression_level_mapping() {
@@ -198,6 +200,19 @@ fn test_jpeg_functionality_unavailable() {
         Ok(grim) => {
             let jpeg_result = grim.to_jpeg(&test_data, 10, 10);
             assert!(jpeg_result.is_err());
+        }
+        Err(_) => {}
+    }
+}
+
+#[cfg(not(feature = "png_support"))]
+#[test]
+fn test_png_functionality_unavailable() {
+    let test_data = vec![255u8; 10 * 10 * 4];
+    match Grim::new() {
+        Ok(grim) => {
+            let png_result = grim.to_png(&test_data, 10, 10);
+            assert!(png_result.is_err());
         }
         Err(_) => {}
     }
@@ -494,7 +509,7 @@ fn test_mock_capture() {
 }
 
 #[test]
-#[cfg(feature = "png")]
+#[cfg(feature = "png_support")]
 fn test_to_png() {
     let grim = Grim::new().unwrap();
     let test_data = vec![255u8; 64];

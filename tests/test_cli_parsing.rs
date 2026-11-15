@@ -110,3 +110,19 @@ fn cli_fails_for_too_many_positional_arguments() {
     assert!(!output.status.success());
     assert_stderr_contains(&output, "Error: too many arguments");
 }
+
+#[test]
+fn cli_warns_when_cursor_flag_without_output_name() {
+    // The warning is emitted before any Wayland connection is made, so this
+    // works headless too (the run then fails with a connection error). On a
+    // live session the capture succeeds and would write out.png into the
+    // current directory — run in a temp dir and clean up afterwards.
+    let temp_dir = std::env::temp_dir();
+    let output = Command::new(env!("CARGO_BIN_EXE_grim-rs"))
+        .args(["-c", "out.png"])
+        .current_dir(&temp_dir)
+        .output()
+        .expect("failed to run grim-rs binary");
+    assert_stderr_contains(&output, "Warning: -c is only supported together with -o");
+    let _ = std::fs::remove_file(temp_dir.join("out.png"));
+}

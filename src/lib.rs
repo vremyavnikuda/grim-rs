@@ -58,6 +58,7 @@ use platform::Platform;
 ///
 /// The `png` crate exposes only three compression modes, so the ten levels
 /// are quantized: 0-2 fast, 3-6 default, 7-9 best.
+#[cfg(feature = "png_support")]
 fn png_compression_level(level: u8) -> png::Compression {
     match level {
         0..=2 => png::Compression::Fast,
@@ -66,6 +67,7 @@ fn png_compression_level(level: u8) -> png::Compression {
     }
 }
 
+#[cfg(feature = "png_support")]
 fn dimension_mismatch() -> Error {
     Error::ImageProcessing(image::ImageError::Parameter(
         image::error::ParameterError::from_kind(
@@ -74,7 +76,19 @@ fn dimension_mismatch() -> Error {
     ))
 }
 
+/// Error returned by the PNG API stubs when the `png_support` feature is disabled.
+#[cfg(not(feature = "png_support"))]
+fn png_not_enabled() -> Error {
+    Error::ImageProcessing(image::ImageError::Unsupported(
+        image::error::UnsupportedError::from_format_and_kind(
+            image::error::ImageFormatHint::Name("PNG".to_string()),
+            image::error::UnsupportedErrorKind::Format(image::ImageFormat::Png.into()),
+        ),
+    ))
+}
+
 /// Validate that `data` holds exactly `width`×`height` RGBA pixels.
+#[cfg(feature = "png_support")]
 fn validate_rgba(data: &[u8], width: u32, height: u32) -> Result<()> {
     let pixels = u64::from(width) * u64::from(height);
     let expected = pixels.checked_mul(4).ok_or_else(dimension_mismatch)?;
@@ -85,6 +99,7 @@ fn validate_rgba(data: &[u8], width: u32, height: u32) -> Result<()> {
 }
 
 /// JPEG stores dimensions as u16 in its header; larger sizes would wrap.
+#[cfg(feature = "jpeg")]
 fn validate_jpeg_dimensions(width: u32, height: u32) -> Result<()> {
     if width > u16::MAX as u32 || height > u16::MAX as u32 {
         return Err(dimension_mismatch());
@@ -94,6 +109,7 @@ fn validate_jpeg_dimensions(width: u32, height: u32) -> Result<()> {
 
 // `slice::as_chunks` (the lint-suggested replacement) needs Rust 1.88; the
 // crate MSRV is 1.82, so the lint is allowed instead.
+#[cfg(feature = "jpeg")]
 #[allow(clippy::chunks_exact_to_as_chunks)]
 fn rgba_to_rgb(data: &[u8]) -> Result<Vec<u8>> {
     let pixels = data.len() / 4;
@@ -753,6 +769,7 @@ impl Grim {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg(feature = "png_support")]
     pub fn save_png<P: AsRef<std::path::Path>>(
         &self,
         data: &[u8],
@@ -761,6 +778,24 @@ impl Grim {
         path: P,
     ) -> Result<()> {
         self.save_png_with_compression(data, width, height, path, 6) // Default compression level of 6
+    }
+
+    /// Save captured data as PNG (stub when feature is disabled).
+    ///
+    /// This stub is used when the `png_support` feature is disabled.
+    ///
+    /// # Errors
+    ///
+    /// Always returns an error indicating that PNG support is not enabled.
+    #[cfg(not(feature = "png_support"))]
+    pub fn save_png<P: AsRef<std::path::Path>>(
+        &self,
+        _data: &[u8],
+        _width: u32,
+        _height: u32,
+        _path: P,
+    ) -> Result<()> {
+        Err(png_not_enabled())
     }
 
     /// Save captured data as PNG with compression level control.
@@ -797,6 +832,7 @@ impl Grim {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg(feature = "png_support")]
     pub fn save_png_with_compression<P: AsRef<std::path::Path>>(
         &self,
         data: &[u8],
@@ -834,6 +870,25 @@ impl Grim {
             .map_err(|e| Error::Io(std::io::Error::other(format!("PNG encoding error: {}", e))))?;
 
         Ok(())
+    }
+
+    /// Save captured data as PNG with compression level control (stub when feature is disabled).
+    ///
+    /// This stub is used when the `png_support` feature is disabled.
+    ///
+    /// # Errors
+    ///
+    /// Always returns an error indicating that PNG support is not enabled.
+    #[cfg(not(feature = "png_support"))]
+    pub fn save_png_with_compression<P: AsRef<std::path::Path>>(
+        &self,
+        _data: &[u8],
+        _width: u32,
+        _height: u32,
+        _path: P,
+        _compression: u8,
+    ) -> Result<()> {
+        Err(png_not_enabled())
     }
 
     /// Save captured data as JPEG.
@@ -1167,8 +1222,21 @@ impl Grim {
     /// println!("PNG data size: {} bytes", png_bytes.len());
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
+    #[cfg(feature = "png_support")]
     pub fn to_png(&self, data: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
         self.to_png_with_compression(data, width, height, 6)
+    }
+
+    /// Get image data as PNG bytes (stub when feature is disabled).
+    ///
+    /// This stub is used when the `png_support` feature is disabled.
+    ///
+    /// # Errors
+    ///
+    /// Always returns an error indicating that PNG support is not enabled.
+    #[cfg(not(feature = "png_support"))]
+    pub fn to_png(&self, _data: &[u8], _width: u32, _height: u32) -> Result<Vec<u8>> {
+        Err(png_not_enabled())
     }
 
     /// Get image data as PNG bytes with compression level control.
@@ -1202,6 +1270,7 @@ impl Grim {
     /// println!("PNG data size: {} bytes", png_bytes.len());
     /// # Ok::<(), grim_rs::Error>(())
     /// ```
+    #[cfg(feature = "png_support")]
     pub fn to_png_with_compression(
         &self,
         data: &[u8],
@@ -1237,6 +1306,24 @@ impl Grim {
         }
 
         Ok(output)
+    }
+
+    /// Get image data as PNG bytes with compression level control (stub when feature is disabled).
+    ///
+    /// This stub is used when the `png_support` feature is disabled.
+    ///
+    /// # Errors
+    ///
+    /// Always returns an error indicating that PNG support is not enabled.
+    #[cfg(not(feature = "png_support"))]
+    pub fn to_png_with_compression(
+        &self,
+        _data: &[u8],
+        _width: u32,
+        _height: u32,
+        _compression: u8,
+    ) -> Result<Vec<u8>> {
+        Err(png_not_enabled())
     }
 
     /// Read region from stdin.

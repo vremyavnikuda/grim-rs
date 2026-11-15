@@ -119,6 +119,10 @@ fn main() -> grim_rs::Result<()> {
         arg_idx += 1;
     }
 
+    if opts.with_cursor && opts.output_name.is_none() {
+        eprintln!("Warning: -c is only supported together with -o; cursor will not be included");
+    }
+
     let output_file = if let Some(file) = output_file {
         file
     } else {
