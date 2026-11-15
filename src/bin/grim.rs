@@ -135,9 +135,6 @@ fn main() -> grim_rs::Result<()> {
             if let Some(region) = opts.geometry {
                 params = params.region(region);
             }
-            if let Some(scale) = opts.scale {
-                params = params.scale(scale);
-            }
             let multi_result = grim.capture_outputs_with_scale(vec![params], effective_scale)?;
             let mut outputs = multi_result.into_outputs();
             if let Some(capture_result) = outputs.remove(output_name.as_str()) {

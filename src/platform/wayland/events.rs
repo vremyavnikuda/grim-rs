@@ -18,6 +18,38 @@ impl Dispatch<WlRegistry, ()> for WaylandCapture {
         } = event
         {
             match interface.as_str() {
+                "wl_output" => {
+                    let output = registry.bind::<WlOutput, _, _>(name, version, qh, ());
+                    let output_id = output.id().protocol_id();
+                    state.globals.output_info.insert(
+                        output_id,
+                        OutputInfo {
+                            name: format!("output-{}", name),
+                            width: 0,
+                            height: 0,
+                            x: 0,
+                            y: 0,
+                            scale: 1,
+                            transform: wayland_client::protocol::wl_output::Transform::Normal,
+                            logical_x: 0,
+                            logical_y: 0,
+                            logical_width: 0,
+                            logical_height: 0,
+                            logical_scale_known: false,
+                            logical_scale: 1.0,
+                            description: None,
+                        },
+                    );
+                    let output_idx = state.globals.outputs.len();
+                    state.globals.outputs.push(output.clone());
+                    if let Some(ref xdg_output_manager) = state.globals.xdg_output_manager {
+                        let output_to_use = &state.globals.outputs[output_idx];
+                        let xdg_output = xdg_output_manager.get_xdg_output(output_to_use, qh, ());
+                        let output_id = output_to_use.id().protocol_id();
+                        state.globals.output_xdg_map.insert(output_id, xdg_output);
+                    }
+                }
+                _ if state.globals.managers_bound => {}
                 "wl_shm" => {
                     state.globals.shm = Some(registry.bind::<WlShm, _, _>(name, version, qh, ()));
                 }
@@ -50,37 +82,6 @@ impl Dispatch<WlRegistry, ()> for WaylandCapture {
                     state.globals.ext_copy_manager = Some(
                         registry.bind::<ExtImageCopyCaptureManagerV1, _, _>(name, version, qh, ()),
                     );
-                }
-                "wl_output" => {
-                    let output = registry.bind::<WlOutput, _, _>(name, version, qh, ());
-                    let output_id = output.id().protocol_id();
-                    state.globals.output_info.insert(
-                        output_id,
-                        OutputInfo {
-                            name: format!("output-{}", name),
-                            width: 0,
-                            height: 0,
-                            x: 0,
-                            y: 0,
-                            scale: 1,
-                            transform: wayland_client::protocol::wl_output::Transform::Normal,
-                            logical_x: 0,
-                            logical_y: 0,
-                            logical_width: 0,
-                            logical_height: 0,
-                            logical_scale_known: false,
-                            logical_scale: 1.0,
-                            description: None,
-                        },
-                    );
-                    let output_idx = state.globals.outputs.len();
-                    state.globals.outputs.push(output.clone());
-                    if let Some(ref xdg_output_manager) = state.globals.xdg_output_manager {
-                        let output_to_use = &state.globals.outputs[output_idx];
-                        let xdg_output = xdg_output_manager.get_xdg_output(output_to_use, qh, ());
-                        let output_id = output_to_use.id().protocol_id();
-                        state.globals.output_xdg_map.insert(output_id, xdg_output);
-                    }
                 }
                 _ => {}
             }

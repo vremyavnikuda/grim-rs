@@ -39,13 +39,11 @@ fn capture_parameters_builder_pattern_works() {
 
     let params = CaptureParameters::new("HDMI-A-1")
         .region(region)
-        .overlay_cursor(true)
-        .scale(2.0);
+        .overlay_cursor(true);
 
     assert_eq!(params.output_name(), "HDMI-A-1");
     assert_eq!(params.region_ref(), Some(&region));
     assert!(params.overlay_cursor_enabled());
-    assert_eq!(params.scale_factor(), Some(2.0));
 }
 
 #[test]
@@ -55,7 +53,6 @@ fn capture_parameters_minimal_construction() {
     assert_eq!(params.output_name(), "eDP-1");
     assert_eq!(params.region_ref(), None);
     assert!(!params.overlay_cursor_enabled());
-    assert_eq!(params.scale_factor(), None);
 }
 
 #[test]
@@ -64,13 +61,11 @@ fn capture_parameters_builder_is_chainable() {
 
     let params = CaptureParameters::new("DP-1")
         .region(region)
-        .overlay_cursor(true)
-        .scale(1.5);
+        .overlay_cursor(true);
 
     assert_eq!(params.output_name(), "DP-1");
     assert!(params.region_ref().is_some());
     assert!(params.overlay_cursor_enabled());
-    assert!(params.scale_factor().is_some());
 }
 
 #[test]
@@ -80,7 +75,14 @@ fn capture_parameters_partial_builder() {
     assert_eq!(params.output_name(), "HDMI-A-2");
     assert_eq!(params.region_ref(), None);
     assert!(params.overlay_cursor_enabled());
-    assert_eq!(params.scale_factor(), None);
+}
+
+#[test]
+#[allow(deprecated)]
+fn capture_parameters_deprecated_scale_still_roundtrips() {
+    let params = CaptureParameters::new("DP-2").scale(2.0);
+    assert_eq!(params.scale_factor(), Some(2.0));
+    assert_eq!(CaptureParameters::new("DP-3").scale_factor(), None);
 }
 
 #[test]

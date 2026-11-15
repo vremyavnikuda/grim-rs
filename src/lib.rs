@@ -92,12 +92,14 @@ fn validate_jpeg_dimensions(width: u32, height: u32) -> Result<()> {
     Ok(())
 }
 
-#[allow(clippy::incompatible_msrv)] // as_chunks requires Rust 1.88, crate MSRV is 1.82
+// `slice::as_chunks` (the lint-suggested replacement) needs Rust 1.88; the
+// crate MSRV is 1.82, so the lint is allowed instead.
+#[allow(clippy::chunks_exact_to_as_chunks)]
 fn rgba_to_rgb(data: &[u8]) -> Result<Vec<u8>> {
     let pixels = data.len() / 4;
     let rgb_len = pixels.checked_mul(3).ok_or_else(dimension_mismatch)?;
     let mut rgb_data = vec![0u8; rgb_len];
-    for (i, rgba) in data.as_chunks::<4>().0.iter().enumerate() {
+    for (i, rgba) in data.chunks_exact(4).enumerate() {
         let base = i * 3;
         rgb_data[base] = rgba[0];
         rgb_data[base + 1] = rgba[1];
@@ -237,6 +239,11 @@ impl CaptureParameters {
     }
 
     /// Sets the scale factor for the output image.
+    #[deprecated(
+        since = "0.2.2",
+        note = "per-output scale is not implemented by any backend; \
+                use `Grim::capture_outputs_with_scale` to scale the whole capture instead"
+    )]
     pub fn scale(mut self, scale: f64) -> Self {
         self.scale = Some(scale);
         self
@@ -258,6 +265,11 @@ impl CaptureParameters {
     }
 
     /// Returns the scale factor, if set.
+    #[deprecated(
+        since = "0.2.2",
+        note = "per-output scale is not implemented by any backend; \
+                use `Grim::capture_outputs_with_scale` to scale the whole capture instead"
+    )]
     pub fn scale_factor(&self) -> Option<f64> {
         self.scale
     }

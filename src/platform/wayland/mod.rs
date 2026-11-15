@@ -149,6 +149,10 @@ pub(super) struct OutputInfo {
 }
 
 pub(super) struct WaylandGlobals {
+    /// Set after `new` binds the one-time globals; later registry dumps from
+    /// `refresh_outputs` only re-enumerate `wl_output` and must not re-bind
+    /// managers (each re-bind wastes a server-side object per capture).
+    managers_bound: bool,
     shm: Option<WlShm>,
     screencopy_manager: Option<ZwlrScreencopyManagerV1>,
     ext_source_manager: Option<ExtOutputImageCaptureSourceManagerV1>,
@@ -181,6 +185,7 @@ impl WaylandCapture {
             Error::WaylandConnection(format!("Failed to connect to Wayland: {}", e))
         })?;
         let globals = WaylandGlobals {
+            managers_bound: false,
             shm: None,
             screencopy_manager: None,
             ext_source_manager: None,
@@ -268,6 +273,7 @@ impl WaylandCapture {
             CaptureBackend::ExtImageCopyCapture { .. } => "ext-image-copy-capture-v1",
         };
         log::info!("grim-rs: using {} backend", backend_label);
+        instance.globals.managers_bound = true;
         instance.backend = Some(backend);
         Ok(instance)
     }

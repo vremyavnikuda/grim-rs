@@ -63,12 +63,10 @@ fn test_capture_result_struct() {
 fn test_capture_parameters_struct() {
     let params = CaptureParameters::new("eDP-1")
         .region(Region::new(0, 0, 800, 600))
-        .overlay_cursor(true)
-        .scale(1.5);
+        .overlay_cursor(true);
     assert_eq!(params.output_name(), "eDP-1");
     assert_eq!(params.region_ref(), Some(&Region::new(0, 0, 800, 600)));
     assert!(params.overlay_cursor_enabled());
-    assert_eq!(params.scale_factor(), Some(1.5));
 }
 
 #[test]
@@ -131,13 +129,14 @@ fn test_png_compression_levels() {
 }
 
 #[test]
+#[allow(clippy::chunks_exact_to_as_chunks)] // as_chunks needs Rust 1.88; crate MSRV is 1.82
 fn test_png_compression_level_mapping() {
     // Gradient mixed with LCG noise: compressible, but not trivially.
     let w = 128u32;
     let h = 128u32;
     let mut data = vec![0u8; (w * h * 4) as usize];
     let mut state = 0x1234_5678u32;
-    for (i, px) in data.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+    for (i, px) in data.chunks_exact_mut(4).enumerate() {
         let x = i as u32 % w;
         let y = i as u32 / w;
         state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
@@ -177,7 +176,6 @@ fn test_capture_parameters_default_behavior() {
     assert_eq!(params.output_name(), "test");
     assert!(params.region_ref().is_none());
     assert!(!params.overlay_cursor_enabled());
-    assert!(params.scale_factor().is_none());
 }
 
 #[cfg(feature = "jpeg")]

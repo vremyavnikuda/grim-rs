@@ -75,9 +75,7 @@ fn main() -> grim_rs::Result<()> {
     }
     if outputs.len() >= 2 {
         let params = vec![
-            CaptureParameters::new(outputs[0].name())
-                .overlay_cursor(true)
-                .scale(0.5),
+            CaptureParameters::new(outputs[0].name()).overlay_cursor(true),
             CaptureParameters::new(outputs[1].name()).region(Region::new(0, 0, 400, 300)),
         ];
         let multi = grim.capture_outputs_with_scale(params, 1.0)?;
