@@ -262,7 +262,12 @@ impl WindowsCapture {
         let mut frame_info = DXGI_OUTDUPL_FRAME_INFO::default();
         let mut attempts = 0;
         loop {
-            let entry = self.dup_cache.get_mut(&info.name).unwrap();
+            let entry = self.dup_cache.get_mut(&info.name).ok_or_else(|| {
+                Error::FrameCapture(format!(
+                    "no duplication session for output '{}'; call get_dup first",
+                    info.name
+                ))
+            })?;
             let dup = &entry.dup;
             let mut desktop_resource: Option<IDXGIResource> = None;
             let result = unsafe {
