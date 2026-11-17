@@ -1,63 +1,101 @@
-use thiserror::Error;
+use std::fmt;
 
-#[derive(Error, Debug)]
+#[derive(Debug)]
 pub enum Error {
-    #[error("Invalid geometry format: {0}")]
     InvalidGeometry(String),
 
-    #[error("No outputs available")]
     NoOutputs,
 
-    #[error("Output not found: {0}")]
     OutputNotFound(String),
 
-    #[error("Invalid capture region: {0}")]
     InvalidRegion(String),
 
-    #[error("Screenshot capture failed")]
     CaptureFailed,
 
-    #[error("Buffer creation failed: {0}")]
     BufferCreation(String),
 
-    #[error("Image processing error: {0}")]
-    ImageProcessing(#[from] image::ImageError),
+    ImageProcessing(image::ImageError),
 
-    #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
+    Io(std::io::Error),
 
-    #[error("IO error during {operation}: {source}")]
     IoWithContext {
         operation: String,
         source: std::io::Error,
     },
 
-    #[error("Compositor doesn't support required protocol: {0}")]
     UnsupportedProtocol(String),
 
-    #[error("Wayland connection error: {0}")]
     WaylandConnection(String),
 
-    #[error("Frame capture failed: {0}")]
     FrameCapture(String),
 
-    #[error("Output transform not supported: {0}")]
     TransformNotSupported(String),
 
-    #[error("Failed to apply Y-invert transformation: {0}")]
     InvertFailed(String),
 
-    #[error("Image scaling failed: {0}")]
     ScalingFailed(String),
 
-    #[error("DirectX error: {0}")]
     DirectXError(String),
 
-    #[error("Protected content cannot be captured: {0}")]
     ProtectedContent(String),
 
-    #[error("No suitable GPU adapter found")]
     NoGpuAdapter,
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::InvalidGeometry(msg) => write!(f, "Invalid geometry format: {msg}"),
+            Error::NoOutputs => write!(f, "No outputs available"),
+            Error::OutputNotFound(name) => write!(f, "Output not found: {name}"),
+            Error::InvalidRegion(msg) => write!(f, "Invalid capture region: {msg}"),
+            Error::CaptureFailed => write!(f, "Screenshot capture failed"),
+            Error::BufferCreation(msg) => write!(f, "Buffer creation failed: {msg}"),
+            Error::ImageProcessing(err) => write!(f, "Image processing error: {err}"),
+            Error::Io(err) => write!(f, "IO error: {err}"),
+            Error::IoWithContext { operation, source } => {
+                write!(f, "IO error during {operation}: {source}")
+            }
+            Error::UnsupportedProtocol(name) => {
+                write!(f, "Compositor doesn't support required protocol: {name}")
+            }
+            Error::WaylandConnection(msg) => write!(f, "Wayland connection error: {msg}"),
+            Error::FrameCapture(msg) => write!(f, "Frame capture failed: {msg}"),
+            Error::TransformNotSupported(msg) => {
+                write!(f, "Output transform not supported: {msg}")
+            }
+            Error::InvertFailed(msg) => write!(f, "Failed to apply Y-invert transformation: {msg}"),
+            Error::ScalingFailed(msg) => write!(f, "Image scaling failed: {msg}"),
+            Error::DirectXError(msg) => write!(f, "DirectX error: {msg}"),
+            Error::ProtectedContent(msg) => {
+                write!(f, "Protected content cannot be captured: {msg}")
+            }
+            Error::NoGpuAdapter => write!(f, "No suitable GPU adapter found"),
+        }
+    }
+}
+
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Error::ImageProcessing(err) => Some(err),
+            Error::Io(err) => Some(err),
+            Error::IoWithContext { source, .. } => Some(source),
+            _ => None,
+        }
+    }
+}
+
+impl From<image::ImageError> for Error {
+    fn from(err: image::ImageError) -> Self {
+        Error::ImageProcessing(err)
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(err: std::io::Error) -> Self {
+        Error::Io(err)
+    }
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
