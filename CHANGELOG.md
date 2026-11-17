@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.1] 2026-11-16
 
+### Added
+
+- **`grim_rs::LocalDateTime`**: a built-in local date-time for timestamped filenames — `LocalDateTime::now()` resolves the system timezone natively (`GetTimeZoneInformation` on Windows, `localtime_r` on Linux) and renders as `YYYYMMDD_HHhMMmSSs`. The CLI's default filename generation and all examples use it instead of `chrono`.
+
 ### Fixed
 
 - **PNG compression levels 1–3 requested maximum compression instead of fast**: Levels 1–3 of the 0–9 scale mapped to `png::Compression::Best`, producing output identical to levels 7–9 and turning "fast, weak compression" into the slowest option. Levels are now quantized monotonically onto the three modes the `png` crate exposes (the `Huffman`/`Rle` variants are deprecated since 0.17.6): 0–2 fast, 3–6 default, 7–9 best. Default level 6 is unchanged. Measured on a 5360×1440 capture: level 0 yields 30.6 MB, level 9 — 706 KB.
@@ -26,8 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Dependency updates**: Bumped `crossbeam-epoch` to v0.9.20, `quick-xml` to v0.41 (via `wayland-scanner` v0.31.11), `anyhow` to v1.0.104, `memmap2` to v0.9.12, `rand` to v0.8.8/v0.9.5 — clears all `cargo audit` vulnerabilities (RUSTSEC-2026-0204, RUSTSEC-2026-0194, RUSTSEC-2026-0195) and unsound warnings. Lockfile-only; the one remaining advisory (`paste` unmaintained) has no fix and does not fail CI.
 - **RGBA conversion stays on `chunks_exact`**: the `chunks_exact_to_as_chunks` clippy lint (default-warn on current stable, fails the clippy CI job with `-D warnings`) suggests `as_chunks`, but `slice::as_chunks` is only stable since Rust 1.88 — above the crate MSRV of 1.82. The two affected functions carry a targeted `#[allow(clippy::chunks_exact_to_as_chunks)]` instead; behavior is unchanged.
 - **Documentation cleanup**: removed stray text accidentally embedded in the `write_jpeg_to_stdout_with_quality` doc comment.
-- **MSRV**: Minimum supported Rust version is now 1.82 (was 1.68). The codebase already relied on 1.82 APIs (`Option::is_none_or`); `rust-version` is now declared in `Cargo.toml` and enforced by a CI job. The lockfile pins `image` to 0.25.6 and `jpeg-encoder` to 0.6.1, since image 0.25.7+ and jpeg-encoder 0.7+ require Rust 1.85+/1.87 (edition2024 manifests).
-- **Leaner dependency tree**: the `image` crate is now built with `default-features = false` — only the parts used for scaling and error types are compiled. This drops 70 transitive crates (AVIF/WebP/TIFF codecs and their native dependencies) from the lockfile and noticeably speeds up fresh builds. No API or behavior change; the `jpeg` feature still produces the same JPEG output via `jpeg-encoder`.
+- **MSRV**: Minimum supported Rust version is now 1.82 (was 1.68). The codebase already relied on 1.82 APIs (`Option::is_none_or`); `rust-version` is now declared in `Cargo.toml` and enforced by a CI job. The lockfile pins `jpeg-encoder` to 0.6.1, since jpeg-encoder 0.7+ requires Rust 1.87 (edition2024 manifest).
+- **Leaner dependency tree**: `thiserror`, `chrono`, and `image` are no longer required, which also drops `syn`, `quote`, `bytemuck`, `byteorder-lite`, `num-traits`, and `windows-link` from downstream builds. Remaining production dependencies are `png`, `jpeg-encoder`, `log`, and `windows` — codecs and OS bindings only. Build times and `cargo audit` surface shrink accordingly.
+- **`Error` is now dependency-free**: hand-written `Display`/`source`/`From` implementations replace the `thiserror` derive, and the `ImageProcessing(image::ImageError)` variant — the one place a third-party type leaked into the public error type — is replaced by two self-describing variants: `Unsupported(String)` (e.g. calling JPEG APIs in a build without the `jpeg` feature) and `InvalidData(String)` (pixel data whose length does not match the declared dimensions). All feature-gated stubs and validation paths return the same messages as before.
+- **Scaling is reimplemented in-house**: the `image` crate's resampler is replaced by a separable two-pass filter pipeline — Triangle for mild downscale, CatmullRom for moderate, Lanczos3 for heavy, point-sampling Nearest for upscale, plus the integer 2x–4x fast path. Filter radius scales correctly for downsampling, edge taps are clamped, and output stays in bounds (verified by unit tests for uniformity, averaging, boundary replication, and gradient monotonicity). The `capture_*_with_scale` methods behave exactly as before.
 
 ## [0.2.0] 2026-06-11
 

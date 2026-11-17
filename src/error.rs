@@ -8,7 +8,10 @@ pub enum Error {
     InvalidRegion(String),
     CaptureFailed,
     BufferCreation(String),
-    ImageProcessing(image::ImageError),
+    /// Operation is not available in this build (e.g. a disabled cargo feature).
+    Unsupported(String),
+    /// Caller-provided pixel data does not match the declared dimensions.
+    InvalidData(String),
     Io(std::io::Error),
     IoWithContext {
         operation: String,
@@ -34,7 +37,8 @@ impl fmt::Display for Error {
             Error::InvalidRegion(msg) => write!(f, "Invalid capture region: {msg}"),
             Error::CaptureFailed => write!(f, "Screenshot capture failed"),
             Error::BufferCreation(msg) => write!(f, "Buffer creation failed: {msg}"),
-            Error::ImageProcessing(err) => write!(f, "Image processing error: {err}"),
+            Error::Unsupported(msg) => write!(f, "Operation not supported: {msg}"),
+            Error::InvalidData(msg) => write!(f, "Data does not match dimensions: {msg}"),
             Error::Io(err) => write!(f, "IO error: {err}"),
             Error::IoWithContext { operation, source } => {
                 write!(f, "IO error during {operation}: {source}")
@@ -61,17 +65,10 @@ impl fmt::Display for Error {
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Error::ImageProcessing(err) => Some(err),
             Error::Io(err) => Some(err),
             Error::IoWithContext { source, .. } => Some(source),
             _ => None,
         }
-    }
-}
-
-impl From<image::ImageError> for Error {
-    fn from(err: image::ImageError) -> Self {
-        Error::ImageProcessing(err)
     }
 }
 

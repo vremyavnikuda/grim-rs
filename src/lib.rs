@@ -74,41 +74,42 @@ fn png_compression_level(level: u8) -> png::Compression {
 }
 
 #[cfg(feature = "png_support")]
-fn dimension_mismatch() -> Error {
-    Error::ImageProcessing(image::ImageError::Parameter(
-        image::error::ParameterError::from_kind(
-            image::error::ParameterErrorKind::DimensionMismatch,
-        ),
+fn dimension_mismatch(data_len: usize, width: u32, height: u32) -> Error {
+    Error::InvalidData(format!(
+        "expected {} bytes for {}x{} RGBA, got {}",
+        u64::from(width) * u64::from(height) * 4,
+        width,
+        height,
+        data_len
     ))
 }
 
 /// Error returned by the PNG API stubs when the `png_support` feature is disabled.
 #[cfg(not(feature = "png_support"))]
 fn png_not_enabled() -> Error {
-    Error::ImageProcessing(image::ImageError::Unsupported(
-        image::error::UnsupportedError::from_format_and_kind(
-            image::error::ImageFormatHint::Name("PNG".to_string()),
-            image::error::UnsupportedErrorKind::Format(image::ImageFormat::Png.into()),
-        ),
-    ))
+    Error::Unsupported("PNG support is disabled; rebuild with --features png_support".to_string())
 }
 
 /// Validate that `data` holds exactly `width`×`height` RGBA pixels.
 #[cfg(feature = "png_support")]
 fn validate_rgba(data: &[u8], width: u32, height: u32) -> Result<()> {
     let pixels = u64::from(width) * u64::from(height);
-    let expected = pixels.checked_mul(4).ok_or_else(dimension_mismatch)?;
-    if expected > usize::MAX as u64 || data.len() != expected as usize {
-        return Err(dimension_mismatch());
+    let expected = pixels.checked_mul(4);
+    match expected {
+        Some(expected) if expected <= usize::MAX as u64 && data.len() == expected as usize => {
+            Ok(())
+        }
+        _ => Err(dimension_mismatch(data.len(), width, height)),
     }
-    Ok(())
 }
 
 /// JPEG stores dimensions as u16 in its header; larger sizes would wrap.
 #[cfg(feature = "jpeg")]
 fn validate_jpeg_dimensions(width: u32, height: u32) -> Result<()> {
     if width > u16::MAX as u32 || height > u16::MAX as u32 {
-        return Err(dimension_mismatch());
+        return Err(Error::InvalidData(format!(
+            "JPEG dimensions must fit u16, got {width}x{height}"
+        )));
     }
     Ok(())
 }
@@ -119,7 +120,9 @@ fn validate_jpeg_dimensions(width: u32, height: u32) -> Result<()> {
 #[allow(clippy::chunks_exact_to_as_chunks)]
 fn rgba_to_rgb(data: &[u8]) -> Result<Vec<u8>> {
     let pixels = data.len() / 4;
-    let rgb_len = pixels.checked_mul(3).ok_or_else(dimension_mismatch)?;
+    let rgb_len = pixels
+        .checked_mul(3)
+        .ok_or_else(|| Error::InvalidData("RGBA buffer too large to convert".to_string()))?;
     let mut rgb_data = vec![0u8; rgb_len];
     for (i, rgba) in data.chunks_exact(4).enumerate() {
         let base = i * 3;
@@ -1013,12 +1016,9 @@ impl Grim {
         _height: u32,
         _path: P,
     ) -> Result<()> {
-        Err(Error::ImageProcessing(image::ImageError::Unsupported(
-            image::error::UnsupportedError::from_format_and_kind(
-                image::error::ImageFormatHint::Name("JPEG".to_string()),
-                image::error::UnsupportedErrorKind::Format(image::ImageFormat::Jpeg.into()),
-            ),
-        )))
+        Err(Error::Unsupported(
+            "JPEG support is disabled; rebuild with --features jpeg".to_string(),
+        ))
     }
 
     /// Save captured data as JPEG with quality control (stub when feature is disabled).
@@ -1037,12 +1037,9 @@ impl Grim {
         _path: P,
         _quality: u8,
     ) -> Result<()> {
-        Err(Error::ImageProcessing(image::ImageError::Unsupported(
-            image::error::UnsupportedError::from_format_and_kind(
-                image::error::ImageFormatHint::Name("JPEG".to_string()),
-                image::error::UnsupportedErrorKind::Format(image::ImageFormat::Jpeg.into()),
-            ),
-        )))
+        Err(Error::Unsupported(
+            "JPEG support is disabled; rebuild with --features jpeg".to_string(),
+        ))
     }
 
     /// Get image data as JPEG bytes.
@@ -1150,12 +1147,9 @@ impl Grim {
     /// Always returns an error indicating that JPEG support is not enabled.
     #[cfg(not(feature = "jpeg"))]
     pub fn to_jpeg(&self, _data: &[u8], _width: u32, _height: u32) -> Result<Vec<u8>> {
-        Err(Error::ImageProcessing(image::ImageError::Unsupported(
-            image::error::UnsupportedError::from_format_and_kind(
-                image::error::ImageFormatHint::Name("JPEG".to_string()),
-                image::error::UnsupportedErrorKind::Format(image::ImageFormat::Jpeg.into()),
-            ),
-        )))
+        Err(Error::Unsupported(
+            "JPEG support is disabled; rebuild with --features jpeg".to_string(),
+        ))
     }
 
     /// Get image data as JPEG bytes with quality control (stub when feature is disabled).
@@ -1173,12 +1167,9 @@ impl Grim {
         _height: u32,
         _quality: u8,
     ) -> Result<Vec<u8>> {
-        Err(Error::ImageProcessing(image::ImageError::Unsupported(
-            image::error::UnsupportedError::from_format_and_kind(
-                image::error::ImageFormatHint::Name("JPEG".to_string()),
-                image::error::UnsupportedErrorKind::Format(image::ImageFormat::Jpeg.into()),
-            ),
-        )))
+        Err(Error::Unsupported(
+            "JPEG support is disabled; rebuild with --features jpeg".to_string(),
+        ))
     }
 
     /// Get image data as PNG bytes.

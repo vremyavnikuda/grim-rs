@@ -311,12 +311,9 @@ fn save_jpeg_to_file(
 
 #[cfg(not(feature = "jpeg"))]
 fn create_jpeg_not_supported_error() -> grim_rs::Error {
-    grim_rs::Error::ImageProcessing(image::ImageError::Unsupported(
-        image::error::UnsupportedError::from_format_and_kind(
-            image::error::ImageFormatHint::Name("JPEG".to_string()),
-            image::error::UnsupportedErrorKind::Format(image::ImageFormat::Jpeg.into()),
-        ),
-    ))
+    grim_rs::Error::Unsupported(
+        "JPEG support is disabled; rebuild with --features jpeg".to_string(),
+    )
 }
 
 fn print_help() {
