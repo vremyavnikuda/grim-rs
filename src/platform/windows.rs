@@ -17,11 +17,40 @@ use windows::Win32::Graphics::Dxgi::Common::DXGI_SAMPLE_DESC;
 use windows::Win32::Graphics::Dxgi::{
     CreateDXGIFactory1, IDXGIAdapter1, IDXGIFactory1, IDXGIOutput, IDXGIOutputDuplication,
     IDXGIResource, DXGI_ERROR_ACCESS_LOST, DXGI_ERROR_WAIT_TIMEOUT, DXGI_OUTDUPL_FRAME_INFO,
-    DXGI_OUTPUT_DESC,
+    DXGI_OUTDUPL_POINTER_POSITION, DXGI_OUTDUPL_POINTER_SHAPE_INFO,
+    DXGI_OUTDUPL_POINTER_SHAPE_TYPE_MONOCHROME, DXGI_OUTPUT_DESC,
 };
 
 const MAX_ACQUIRE_ATTEMPTS: usize = 100;
 const ACQUIRE_TIMEOUT_MS: u32 = 100;
+
+/// Read the active pointer shape from an acquired duplication frame.
+/// Must be called between `AcquireNextFrame` and `ReleaseFrame`.
+fn fetch_cursor_shape(dup: &IDXGIOutputDuplication, buf_size: u32) -> Option<CachedCursorShape> {
+    if buf_size == 0 {
+        return None;
+    }
+    let mut shape_info = DXGI_OUTDUPL_POINTER_SHAPE_INFO::default();
+    let mut size: u32 = 0;
+    let mut buf: Vec<u8> = vec![0u8; buf_size as usize];
+    let result = unsafe {
+        dup.GetFramePointerShape(
+            buf_size,
+            buf.as_mut_ptr() as *mut std::ffi::c_void,
+            &mut size,
+            &mut shape_info,
+        )
+    };
+    if result.is_ok() && size > 0 && shape_info.Width > 0 && shape_info.Height > 0 {
+        Some(CachedCursorShape {
+            info: shape_info,
+            buf,
+        })
+    } else {
+        log::debug!("GetFramePointerShape failed ({result:?}); keeping previous cursor shape");
+        None
+    }
+}
 
 #[derive(Clone)]
 struct OutputInfo {
@@ -41,10 +70,23 @@ struct AdapterState {
     context: ID3D11DeviceContext,
 }
 
+struct CachedCursorShape {
+    info: DXGI_OUTDUPL_POINTER_SHAPE_INFO,
+    buf: Vec<u8>,
+}
+
+struct DupEntry {
+    dup: IDXGIOutputDuplication,
+    cursor_shape: Option<CachedCursorShape>,
+    // DXGI only sends PointerPosition on frames where the pointer moved
+    // (LastMouseUpdateTime != 0); remember the last known position.
+    pointer_position: Option<DXGI_OUTDUPL_POINTER_POSITION>,
+}
+
 pub struct WindowsCapture {
     adapters: Vec<AdapterState>,
     output_info: Vec<OutputInfo>,
-    dup_cache: HashMap<String, IDXGIOutputDuplication>,
+    dup_cache: HashMap<String, DupEntry>,
     factory: IDXGIFactory1,
 }
 
@@ -189,7 +231,12 @@ impl WindowsCapture {
 
         // Skip the initial blank frame that DXGI returns after DuplicateOutput.
         // The first AcquireNextFrame may return WAIT_TIMEOUT, so retry until we
-        // get a real frame to discard.
+        // get a real frame to discard. The pointer shape is reported with this
+        // initial frame (and on later frames only when it changes), so cache
+        // it here - relying on per-frame PointerShapeBufferSize would leave
+        // most captures without a cursor.
+        let mut cursor_shape = None;
+        let mut pointer_position = None;
         for _ in 0..MAX_ACQUIRE_ATTEMPTS {
             let mut frame_info = DXGI_OUTDUPL_FRAME_INFO::default();
             let mut dummy_resource: Option<IDXGIResource> = None;
@@ -201,6 +248,17 @@ impl WindowsCapture {
                 )
             };
             if result.is_ok() {
+                if cursor_shape.is_none() {
+                    cursor_shape = fetch_cursor_shape(&dup, frame_info.PointerShapeBufferSize);
+                    log::debug!(
+                        "initial cursor shape: size={} cached={}",
+                        frame_info.PointerShapeBufferSize,
+                        cursor_shape.is_some()
+                    );
+                }
+                if frame_info.LastMouseUpdateTime != 0 || pointer_position.is_none() {
+                    pointer_position = Some(frame_info.PointerPosition);
+                }
                 unsafe {
                     let _ = dup.ReleaseFrame();
                 };
@@ -208,7 +266,14 @@ impl WindowsCapture {
             }
         }
 
-        self.dup_cache.insert(info.name.clone(), dup);
+        self.dup_cache.insert(
+            info.name.clone(),
+            DupEntry {
+                dup,
+                cursor_shape,
+                pointer_position,
+            },
+        );
         Ok(())
     }
 
@@ -221,7 +286,8 @@ impl WindowsCapture {
         let mut attempts = 0;
 
         loop {
-            let dup = self.dup_cache.get(&info.name).unwrap();
+            let entry = self.dup_cache.get_mut(&info.name).unwrap();
+            let dup = &entry.dup;
             let mut desktop_resource: Option<IDXGIResource> = None;
             let result = unsafe {
                 dup.AcquireNextFrame(
@@ -321,46 +387,68 @@ impl WindowsCapture {
                     }
 
                     unsafe { adapter.context.Unmap(&staging, 0) };
+
+                    // The shape buffer is only filled when the shape changed;
+                    // refresh the cached shape before releasing the frame.
+                    if overlay_cursor && frame_info.PointerShapeBufferSize > 0 {
+                        if let Some(shape) =
+                            fetch_cursor_shape(dup, frame_info.PointerShapeBufferSize)
+                        {
+                            entry.cursor_shape = Some(shape);
+                        }
+                    }
+                    if frame_info.LastMouseUpdateTime != 0 || entry.pointer_position.is_none() {
+                        entry.pointer_position = Some(frame_info.PointerPosition);
+                    }
+
                     unsafe { dup.ReleaseFrame() }
                         .map_err(|e| Error::DirectXError(format!("ReleaseFrame: {e}")))?;
 
                     pixel_format::convert_to_rgba(&mut pixels, PixelFormat::Argb8888);
 
-                    if overlay_cursor && frame_info.PointerShapeBufferSize > 0 {
-                        let mut shape_info =
-                            windows::Win32::Graphics::Dxgi::DXGI_OUTDUPL_POINTER_SHAPE_INFO::default();
-                        let mut buf_size: u32 = 0;
-                        let cursor_buf_size = frame_info.PointerShapeBufferSize as usize;
-                        let mut cursor_buf: Vec<u8> = vec![0u8; cursor_buf_size];
-                        let result = unsafe {
-                            dup.GetFramePointerShape(
-                                frame_info.PointerShapeBufferSize,
-                                cursor_buf.as_mut_ptr() as *mut std::ffi::c_void,
-                                &mut buf_size,
-                                &mut shape_info,
-                            )
-                        };
-                        if result.is_ok()
-                            && buf_size > 0
-                            && shape_info.Width > 0
-                            && shape_info.Height > 0
-                        {
-                            let cursor_w = shape_info.Width;
-                            let cursor_h = shape_info.Height;
-                            let cursor_pitch = shape_info.Pitch as usize;
-                            let hotspot_x = shape_info.HotSpot.x;
-                            let hotspot_y = shape_info.HotSpot.y;
-                            let screen_x = frame_info.PointerPosition.Position.x - hotspot_x;
-                            let screen_y = frame_info.PointerPosition.Position.y - hotspot_y;
+                    // The shape comes from the cache because DXGI only resends
+                    // it when it changes; the position is the last one DXGI
+                    // reported (frames without mouse movement carry no update).
+                    if overlay_cursor {
+                        let pointer = entry.pointer_position;
+                        log::debug!(
+                            "blending cursor: shape_cached={} pointer={:?}",
+                            entry.cursor_shape.is_some(),
+                            pointer.map(|p| (p.Position, p.Visible.as_bool()))
+                        );
+                        if let Some(pointer) = pointer.filter(|p| p.Visible.as_bool()) {
+                            if let Some(CachedCursorShape { info, buf }) = &entry.cursor_shape {
+                                let screen_x = pointer.Position.x - info.HotSpot.x;
+                                let screen_y = pointer.Position.y - info.HotSpot.y;
 
-                            blend_cursor_rgba(
-                                &mut pixels,
-                                (width, height),
-                                &cursor_buf,
-                                (cursor_w, cursor_h),
-                                cursor_pitch,
-                                (screen_x, screen_y),
-                            );
+                                if info.Type == DXGI_OUTDUPL_POINTER_SHAPE_TYPE_MONOCHROME.0 as u32
+                                {
+                                    // A monochromatic shape packs two 1bpp masks;
+                                    // Height counts both, so the visible height is
+                                    // half of it.
+                                    blend_mono_cursor_rgba(
+                                        &mut pixels,
+                                        (width, height),
+                                        buf,
+                                        (info.Width, info.Height / 2),
+                                        info.Pitch as usize,
+                                        (screen_x, screen_y),
+                                    );
+                                } else {
+                                    // COLOR shapes are 32-bit BGRA. MASKED_COLOR
+                                    // stores the color bitmap first with the same
+                                    // pitch, so blending it as color is safe (the
+                                    // AND mask tail is simply never read).
+                                    blend_cursor_rgba(
+                                        &mut pixels,
+                                        (width, height),
+                                        buf,
+                                        (info.Width, info.Height),
+                                        info.Pitch as usize,
+                                        (screen_x, screen_y),
+                                    );
+                                }
+                            }
                         }
                     }
 
@@ -603,6 +691,19 @@ pub fn blend_cursor_rgba(
     let (frame_w, frame_h) = frame_size;
     let (cursor_w, cursor_h) = cursor_size;
     let (screen_x, screen_y) = screen_pos;
+    if cursor_w == 0
+        || cursor_h == 0
+        || cursor_buf.len() < (cursor_h as usize - 1) * cursor_pitch + cursor_w as usize * 4
+    {
+        log::debug!(
+            "cursor shape buffer too small ({} bytes for {}x{} @ pitch {})",
+            cursor_buf.len(),
+            cursor_w,
+            cursor_h,
+            cursor_pitch
+        );
+        return;
+    }
     for cy in 0..cursor_h as i32 {
         for cx in 0..cursor_w as i32 {
             let px = screen_x + cx;
@@ -624,6 +725,83 @@ pub fn blend_cursor_rgba(
             frame[fi + 1] = (cg * a + frame[fi + 1] as f32 * (1.0 - a)) as u8;
             frame[fi + 2] = (cb * a + frame[fi + 2] as f32 * (1.0 - a)) as u8;
             frame[fi + 3] = 255;
+        }
+    }
+}
+
+fn mono_bit(buf: &[u8], row: usize, x: u32, pitch: usize) -> bool {
+    let idx = row.saturating_mul(pitch).saturating_add((x / 8) as usize);
+    buf.get(idx)
+        .map(|b| b & (0x80u8 >> (x % 8)) != 0)
+        .unwrap_or(false)
+}
+
+/// Blend a `DXGI_OUTDUPL_POINTER_SHAPE_TYPE_MONOCHROMATIC` pointer shape into
+/// an RGBA frame.
+///
+/// The buffer holds two 1bpp masks, `cursor_size.1` rows each, MSB first: the
+/// AND mask followed by the XOR mask. Bit combinations per pixel:
+/// AND=0/XOR=0 -> opaque black, AND=0/XOR=1 -> opaque white,
+/// AND=1/XOR=0 -> transparent, AND=1/XOR=1 -> invert the frame pixel.
+pub fn blend_mono_cursor_rgba(
+    frame: &mut [u8],
+    frame_size: (u32, u32),
+    cursor_buf: &[u8],
+    cursor_size: (u32, u32),
+    cursor_pitch: usize,
+    screen_pos: (i32, i32),
+) {
+    let (frame_w, frame_h) = frame_size;
+    let (cursor_w, cursor_h) = cursor_size;
+    let (screen_x, screen_y) = screen_pos;
+    // Two masks, cursor_h rows each; refuse truncated shapes instead of
+    // drawing garbage from out-of-range reads.
+    if cursor_w == 0 || cursor_h == 0 || cursor_buf.len() < cursor_h as usize * 2 * cursor_pitch {
+        log::debug!(
+            "mono cursor shape buffer too small ({} bytes for {}x{} @ pitch {})",
+            cursor_buf.len(),
+            cursor_w,
+            cursor_h,
+            cursor_pitch
+        );
+        return;
+    }
+    for cy in 0..cursor_h as i32 {
+        for cx in 0..cursor_w as i32 {
+            let px = screen_x + cx;
+            let py = screen_y + cy;
+            if px < 0 || py < 0 || px >= frame_w as i32 || py >= frame_h as i32 {
+                continue;
+            }
+            let and = mono_bit(cursor_buf, cy as usize, cx as u32, cursor_pitch);
+            let xor = mono_bit(
+                cursor_buf,
+                cursor_h as usize + cy as usize,
+                cx as u32,
+                cursor_pitch,
+            );
+            let fi = (py as usize * frame_w as usize + px as usize) * 4;
+            match (and, xor) {
+                (false, false) => {
+                    frame[fi] = 0;
+                    frame[fi + 1] = 0;
+                    frame[fi + 2] = 0;
+                    frame[fi + 3] = 255;
+                }
+                (false, true) => {
+                    frame[fi] = 255;
+                    frame[fi + 1] = 255;
+                    frame[fi + 2] = 255;
+                    frame[fi + 3] = 255;
+                }
+                (true, true) => {
+                    frame[fi] = 255 - frame[fi];
+                    frame[fi + 1] = 255 - frame[fi + 1];
+                    frame[fi + 2] = 255 - frame[fi + 2];
+                    frame[fi + 3] = 255;
+                }
+                (true, false) => {}
+            }
         }
     }
 }
