@@ -1,14 +1,8 @@
-use chrono::Local;
-use grim_rs::{Grim, Region, Result};
+use grim_rs::{Grim, LocalDateTime, Region, Result};
 
 fn generate_filename(description: &str, extension: &str) -> String {
-    let now = Local::now();
-    format!(
-        "{}_second_monitor_{}.{}",
-        now.format("%Y%m%d_%Hh%Mm%Ss"),
-        description,
-        extension
-    )
+    let now = LocalDateTime::now();
+    format!("{}_second_monitor_{}.{}", now, description, extension)
 }
 
 fn main() -> Result<()> {

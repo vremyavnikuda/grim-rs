@@ -61,7 +61,6 @@ impl WaylandCapture {
                 "Capture region origin must be non-negative".to_string(),
             ));
         }
-
         let backend = self.backend_cloned()?;
         match backend {
             CaptureBackend::WlrScreencopy { manager } => {
@@ -148,7 +147,6 @@ impl WaylandCapture {
             .shm
             .as_ref()
             .ok_or_else(|| Error::UnsupportedProtocol("wl_shm not available".to_string()))?;
-
         let (width, height, stride, size, format) = {
             let state = lock_frame_state(&frame_state)?;
             if state.width == 0 || state.height == 0 {
@@ -420,7 +418,6 @@ impl WaylandCapture {
             final_width = cw;
             final_height = ch;
         }
-
         Ok(CaptureResult {
             data: final_data,
             width: final_width,
@@ -445,7 +442,6 @@ impl WaylandCapture {
                 (info.name.clone(), s)
             })
             .collect();
-
         let output_tuples: Vec<(String, Region)> = outputs
             .iter()
             .map(|(_, info)| {
@@ -460,7 +456,6 @@ impl WaylandCapture {
                 )
             })
             .collect();
-
         crate::compositor::composite_region(
             region,
             &output_tuples,
@@ -492,7 +487,6 @@ impl WaylandCapture {
                 } else {
                     (info.x, info.y, info.width, info.height)
                 };
-
                 Output {
                     name: info.name.clone(),
                     geometry: Region::new(x, y, width, height),
@@ -513,7 +507,6 @@ impl WaylandCapture {
         if snapshot.is_empty() {
             return Err(Error::NoOutputs);
         }
-
         let (_, first_info) = &snapshot[0];
         let mut min_x = first_info.logical_x;
         let mut min_y = first_info.logical_y;
@@ -523,14 +516,12 @@ impl WaylandCapture {
         let mut max_y = first_info
             .logical_y
             .saturating_add(first_info.logical_height);
-
         for (_, info) in &snapshot {
             min_x = min_x.min(info.logical_x);
             min_y = min_y.min(info.logical_y);
             max_x = max_x.max(info.logical_x.saturating_add(info.logical_width));
             max_y = max_y.max(info.logical_y.saturating_add(info.logical_height));
         }
-
         let region = Region::new(min_x, min_y, max_x - min_x, max_y - min_y);
         self.composite_region(region, &snapshot, false)
     }
@@ -547,7 +538,6 @@ impl WaylandCapture {
             .into_iter()
             .find(|(_, info)| info.name == output_name)
             .ok_or_else(|| Error::OutputNotFound(output_name.to_string()))?;
-
         let local_region = Region::new(0, 0, info.logical_width, info.logical_height);
         self.capture_region_for_output(&output_handle, local_region, false)
     }
@@ -581,7 +571,6 @@ impl WaylandCapture {
         parameters: Vec<CaptureParameters>,
     ) -> Result<MultiOutputCaptureResult> {
         self.refresh_outputs()?;
-
         let backend = self.backend_cloned()?;
         match backend {
             CaptureBackend::WlrScreencopy { manager } => {
@@ -611,7 +600,6 @@ impl WaylandCapture {
                 .iter()
                 .find(|(_, info)| info.name == param.output_name())
                 .ok_or_else(|| Error::OutputNotFound(param.output_name().to_string()))?;
-
             let output = self
                 .globals
                 .outputs
@@ -807,7 +795,6 @@ impl WaylandCapture {
             let mut final_data = buffer_data;
             let mut final_width = width;
             let mut final_height = height;
-
             if let Some(info) = self
                 .globals
                 .output_info
@@ -867,7 +854,6 @@ impl WaylandCapture {
                 .iter()
                 .find(|(_, info)| info.name == param.output_name())
                 .ok_or_else(|| Error::OutputNotFound(param.output_name().to_string()))?;
-
             let region = if let Some(region) = param.region_ref() {
                 let output_right = output_info.logical_width;
                 let output_bottom = output_info.logical_height;

@@ -1,7 +1,6 @@
 #[cfg(target_os = "windows")]
 mod windows_cursor_blend {
     use grim_rs::{blend_cursor_rgba, blend_mono_cursor_rgba};
-
     fn make_frame(w: u32, h: u32, r: u8, g: u8, b: u8, a: u8) -> Vec<u8> {
         let mut buf = vec![0u8; (w * h * 4) as usize];
         for y in 0..h {

@@ -2,6 +2,7 @@ pub(super) use crate::{
     CaptureParameters, CaptureResult, Error, MultiOutputCaptureResult, Output, Region, Result,
 };
 pub(super) use std::collections::HashMap;
+
 pub(super) use std::os::fd::{AsRawFd, BorrowedFd};
 pub(super) use std::sync::{Arc, Mutex};
 pub(super) use wayland_client::{
@@ -36,6 +37,7 @@ mod capture;
 mod events;
 
 pub(super) const ZWLR_SCREENCOPY_FRAME_V1_FLAGS_Y_INVERT: u32 = 1;
+
 pub(super) const MAX_ATTEMPTS: usize = 100;
 
 /// Captures which capture protocol is in use and holds its specific manager objects.
@@ -103,7 +105,6 @@ pub(super) fn guess_output_logical_geometry(info: &mut OutputInfo) {
     info.logical_y = info.y;
     info.logical_width = info.width / info.scale;
     info.logical_height = info.height / info.scale;
-
     crate::transform::apply_output_transform(
         info.transform.into(),
         &mut info.logical_width,
@@ -118,7 +119,6 @@ pub(super) fn update_logical_scale(info: &mut OutputInfo) {
     if info.width <= 0 || info.height <= 0 || info.logical_width <= 0 || info.logical_height <= 0 {
         return;
     }
-
     let mut physical_width = info.width;
     let mut physical_height = info.height;
     crate::transform::apply_output_transform(
@@ -126,7 +126,6 @@ pub(super) fn update_logical_scale(info: &mut OutputInfo) {
         &mut physical_width,
         &mut physical_height,
     );
-
     info.logical_scale = (physical_width as f64) / (info.logical_width as f64);
 }
 
@@ -195,7 +194,6 @@ impl WaylandCapture {
             output_info: HashMap::new(),
             output_xdg_map: HashMap::new(),
         };
-
         let mut event_queue = connection.new_event_queue();
         let qh = event_queue.handle();
         let _registry = connection.display().get_registry(&qh, ());
@@ -207,7 +205,6 @@ impl WaylandCapture {
         event_queue.roundtrip(&mut instance).map_err(|e| {
             Error::WaylandConnection(format!("Failed to initialize Wayland globals: {}", e))
         })?;
-
         let backend = match preference {
             crate::Backend::ExtImageCopyCapture => {
                 let source_manager =
@@ -261,13 +258,11 @@ impl WaylandCapture {
                 }
             }
         };
-
         if instance.globals.shm.is_none() {
             return Err(Error::UnsupportedProtocol(
                 "wl_shm not available".to_string(),
             ));
         }
-
         let backend_label = match &backend {
             CaptureBackend::WlrScreencopy { .. } => "wlr-screencopy",
             CaptureBackend::ExtImageCopyCapture { .. } => "ext-image-copy-capture-v1",

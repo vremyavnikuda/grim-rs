@@ -3,11 +3,10 @@
 //! Usage:
 //!   cargo run --example windows_capture
 
-use chrono::Local;
-use grim_rs::{CaptureParameters, Grim, Region};
+use grim_rs::{CaptureParameters, Grim, LocalDateTime, Region};
 
 fn filename(label: &str, ext: &str) -> String {
-    let ts = Local::now().format("%Y%m%d_%H%M%S");
+    let ts = LocalDateTime::now();
     format!("{}_{}.{}", ts, label, ext)
 }
 

@@ -60,7 +60,6 @@ impl Dispatch<WlRegistry, ()> for WaylandCapture {
                 "zxdg_output_manager_v1" => {
                     state.globals.xdg_output_manager =
                         Some(registry.bind::<ZxdgOutputManagerV1, _, _>(name, version, qh, ()));
-
                     if let Some(ref xdg_output_manager) = state.globals.xdg_output_manager {
                         for output in &state.globals.outputs {
                             let xdg_output = xdg_output_manager.get_xdg_output(output, qh, ());
@@ -121,7 +120,6 @@ impl Dispatch<WlOutput, ()> for WaylandCapture {
                         info.logical_x = x;
                         info.logical_y = y;
                     }
-
                     update_logical_scale(info);
                 }
             }
@@ -145,7 +143,6 @@ impl Dispatch<WlOutput, ()> for WaylandCapture {
                         info.logical_width = width;
                         info.logical_height = height;
                     }
-
                     update_logical_scale(info);
                 }
             }
@@ -340,9 +337,7 @@ impl Dispatch<ZxdgOutputV1, ()> for WaylandCapture {
         _qh: &QueueHandle<Self>,
     ) {
         use wayland_protocols::xdg::xdg_output::zv1::client::zxdg_output_v1::Event;
-
         let xdg_output_id = xdg_output.id().protocol_id();
-
         let mut found_output_id = None;
         for (wl_output_id, mapped_xdg_output) in &state.globals.output_xdg_map {
             if mapped_xdg_output.id().protocol_id() == xdg_output_id {

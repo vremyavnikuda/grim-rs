@@ -1,7 +1,9 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use grim_rs::Grim;
+
 #[cfg(unix)]
 use std::ffi::CString;
+
 #[cfg(windows)]
 use std::os::windows::ffi::OsStrExt;
 use std::path::PathBuf;
@@ -61,7 +63,6 @@ mod win32 {
     pub const STD_OUTPUT_HANDLE: u32 = 0xFFFFFFF5;
     pub const GENERIC_WRITE: u32 = 0x40000000;
     pub const OPEN_EXISTING: u32 = 3;
-
     extern "system" {
         pub fn GetStdHandle(nStdHandle: u32) -> isize;
         pub fn SetStdHandle(nStdHandle: u32, hHandle: isize) -> i32;
@@ -92,12 +93,10 @@ impl StdoutSilencer {
             if saved == -1 || saved == 0 {
                 return None;
             }
-
             let nul_path: Vec<u16> = std::ffi::OsStr::new("NUL")
                 .encode_wide()
                 .chain(std::iter::once(0))
                 .collect();
-
             let nul_handle = win32::CreateFileW(
                 nul_path.as_ptr(),
                 win32::GENERIC_WRITE,
@@ -107,11 +106,9 @@ impl StdoutSilencer {
                 0,
                 0,
             );
-
             if nul_handle == -1 {
                 return None;
             }
-
             win32::SetStdHandle(win32::STD_OUTPUT_HANDLE, nul_handle);
             Some(Self {
                 saved_handle: saved,
@@ -151,17 +148,14 @@ fn generate_test_data(width: u32, height: u32) -> Vec<u8> {
 
 fn benchmark_png_encoding(c: &mut Criterion) {
     let mut group = c.benchmark_group("png_encoding");
-
     let sizes = [
         ("640x480", 640, 480),
         ("1920x1080", 1920, 1080),
         ("3840x2160", 3840, 2160),
     ];
-
     for (name, width, height) in sizes.iter() {
         let data = generate_test_data(*width, *height);
         let bytes = data.len() as u64;
-
         group.throughput(Throughput::Bytes(bytes));
         group.bench_with_input(BenchmarkId::from_parameter(name), &data, |b, data| {
             let grim = Grim::new().expect("Failed to create Grim");
@@ -173,17 +167,14 @@ fn benchmark_png_encoding(c: &mut Criterion) {
             });
         });
     }
-
     group.finish();
 }
 
 fn benchmark_png_compression_levels(c: &mut Criterion) {
     let mut group = c.benchmark_group("png_compression_levels");
-
     let width = 1920;
     let height = 1080;
     let data = generate_test_data(width, height);
-
     for level in [1, 6, 9].iter() {
         group.bench_with_input(BenchmarkId::from_parameter(level), level, |b, &level| {
             let grim = Grim::new().expect("Failed to create Grim");
@@ -195,19 +186,16 @@ fn benchmark_png_compression_levels(c: &mut Criterion) {
             });
         });
     }
-
     group.finish();
 }
 
 fn benchmark_png_save(c: &mut Criterion) {
     let mut group = c.benchmark_group("png_save");
-
     let sizes = [
         ("640x480", 640, 480),
         ("1920x1080", 1920, 1080),
         ("3840x2160", 3840, 2160),
     ];
-
     for (name, width, height) in sizes.iter() {
         let data = generate_test_data(*width, *height);
         let path = temp_path("save_png", "png", *width, *height);
@@ -219,17 +207,14 @@ fn benchmark_png_save(c: &mut Criterion) {
             });
         });
     }
-
     group.finish();
 }
 
 fn benchmark_png_save_compression_levels(c: &mut Criterion) {
     let mut group = c.benchmark_group("png_save_compression_levels");
-
     let width = 1920;
     let height = 1080;
     let data = generate_test_data(width, height);
-
     for level in [1, 6, 9].iter() {
         let path = temp_path(&format!("save_png_lvl{}", level), "png", width, height);
         group.bench_with_input(BenchmarkId::from_parameter(level), level, |b, &level| {
@@ -240,24 +225,20 @@ fn benchmark_png_save_compression_levels(c: &mut Criterion) {
             });
         });
     }
-
     group.finish();
 }
 
 #[cfg(feature = "jpeg")]
 fn benchmark_jpeg_encoding(c: &mut Criterion) {
     let mut group = c.benchmark_group("jpeg_encoding");
-
     let sizes = [
         ("640x480", 640, 480),
         ("1920x1080", 1920, 1080),
         ("3840x2160", 3840, 2160),
     ];
-
     for (name, width, height) in sizes.iter() {
         let data = generate_test_data(*width, *height);
         let bytes = data.len() as u64;
-
         group.throughput(Throughput::Bytes(bytes));
         group.bench_with_input(BenchmarkId::from_parameter(name), &data, |b, data| {
             let grim = Grim::new().expect("Failed to create Grim");
@@ -269,18 +250,15 @@ fn benchmark_jpeg_encoding(c: &mut Criterion) {
             });
         });
     }
-
     group.finish();
 }
 
 #[cfg(feature = "jpeg")]
 fn benchmark_jpeg_quality_levels(c: &mut Criterion) {
     let mut group = c.benchmark_group("jpeg_quality_levels");
-
     let width = 1920;
     let height = 1080;
     let data = generate_test_data(width, height);
-
     for quality in [60, 80, 95].iter() {
         group.bench_with_input(
             BenchmarkId::from_parameter(quality),
@@ -296,20 +274,17 @@ fn benchmark_jpeg_quality_levels(c: &mut Criterion) {
             },
         );
     }
-
     group.finish();
 }
 
 #[cfg(feature = "jpeg")]
 fn benchmark_jpeg_save(c: &mut Criterion) {
     let mut group = c.benchmark_group("jpeg_save");
-
     let sizes = [
         ("640x480", 640, 480),
         ("1920x1080", 1920, 1080),
         ("3840x2160", 3840, 2160),
     ];
-
     for (name, width, height) in sizes.iter() {
         let data = generate_test_data(*width, *height);
         let path = temp_path("save_jpeg", "jpg", *width, *height);
@@ -321,18 +296,15 @@ fn benchmark_jpeg_save(c: &mut Criterion) {
             });
         });
     }
-
     group.finish();
 }
 
 #[cfg(feature = "jpeg")]
 fn benchmark_jpeg_save_quality_levels(c: &mut Criterion) {
     let mut group = c.benchmark_group("jpeg_save_quality_levels");
-
     let width = 1920;
     let height = 1080;
     let data = generate_test_data(width, height);
-
     for quality in [60, 80, 95].iter() {
         let path = temp_path(&format!("save_jpeg_q{}", quality), "jpg", width, height);
         group.bench_with_input(
@@ -347,17 +319,14 @@ fn benchmark_jpeg_save_quality_levels(c: &mut Criterion) {
             },
         );
     }
-
     group.finish();
 }
 
 fn benchmark_png_stdout(c: &mut Criterion) {
     let mut group = c.benchmark_group("png_stdout");
-
     let width = 1920;
     let height = 1080;
     let data = generate_test_data(width, height);
-
     group.bench_function("write_png_to_stdout", |b| {
         let grim = Grim::new().expect("Failed to create Grim");
         b.iter(|| {
@@ -366,17 +335,14 @@ fn benchmark_png_stdout(c: &mut Criterion) {
                 .expect("Failed to write PNG");
         });
     });
-
     group.finish();
 }
 
 fn benchmark_png_stdout_compression(c: &mut Criterion) {
     let mut group = c.benchmark_group("png_stdout_compression");
-
     let width = 1920;
     let height = 1080;
     let data = generate_test_data(width, height);
-
     for level in [1, 6, 9].iter() {
         group.bench_with_input(BenchmarkId::from_parameter(level), level, |b, &level| {
             let grim = Grim::new().expect("Failed to create Grim");
@@ -387,18 +353,15 @@ fn benchmark_png_stdout_compression(c: &mut Criterion) {
             });
         });
     }
-
     group.finish();
 }
 
 #[cfg(feature = "jpeg")]
 fn benchmark_jpeg_stdout(c: &mut Criterion) {
     let mut group = c.benchmark_group("jpeg_stdout");
-
     let width = 1920;
     let height = 1080;
     let data = generate_test_data(width, height);
-
     group.bench_function("write_jpeg_to_stdout", |b| {
         let grim = Grim::new().expect("Failed to create Grim");
         b.iter(|| {
@@ -407,18 +370,15 @@ fn benchmark_jpeg_stdout(c: &mut Criterion) {
                 .expect("Failed to write JPEG");
         });
     });
-
     group.finish();
 }
 
 #[cfg(feature = "jpeg")]
 fn benchmark_jpeg_stdout_quality(c: &mut Criterion) {
     let mut group = c.benchmark_group("jpeg_stdout_quality");
-
     let width = 1920;
     let height = 1080;
     let data = generate_test_data(width, height);
-
     for quality in [60, 80, 95].iter() {
         group.bench_with_input(
             BenchmarkId::from_parameter(quality),
@@ -433,7 +393,6 @@ fn benchmark_jpeg_stdout_quality(c: &mut Criterion) {
             },
         );
     }
-
     group.finish();
 }
 

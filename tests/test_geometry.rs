@@ -17,9 +17,7 @@ fn test_box_parsing() {
 fn test_box_intersection() {
     let box1 = Region::new(0, 0, 100, 100);
     let box2 = Region::new(50, 50, 100, 100);
-
     assert!(box1.intersects(&box2));
-
     let intersection = match box1.intersection(&box2) {
         Some(value) => value,
         None => panic!("expected intersection, got none"),

@@ -22,6 +22,7 @@ use windows::Win32::Graphics::Dxgi::{
 };
 
 const MAX_ACQUIRE_ATTEMPTS: usize = 100;
+
 const ACQUIRE_TIMEOUT_MS: u32 = 100;
 
 /// Read the active pointer shape from an acquired duplication frame.
@@ -93,34 +94,26 @@ pub struct WindowsCapture {
 impl WindowsCapture {
     pub fn new(_preference: Backend) -> Result<Self> {
         let _ = _preference;
-
         let factory: IDXGIFactory1 = unsafe { CreateDXGIFactory1() }
             .map_err(|e| Error::DirectXError(format!("CreateDXGIFactory1: {e}")))?;
-
         let mut adapters = Vec::new();
         let mut output_info = Vec::new();
-
         for adapter_idx in 0u32.. {
             let adapter: IDXGIAdapter1 = match unsafe { factory.EnumAdapters1(adapter_idx) } {
                 Ok(a) => a,
                 Err(_) => break,
             };
-
             let desc = unsafe { adapter.GetDesc1() }
                 .map_err(|e| Error::DirectXError(format!("GetDesc1: {e}")))?;
-
             if (desc.Flags & 1) != 0 {
                 continue;
             }
-
             let mut device: Option<ID3D11Device> = None;
             let mut context: Option<ID3D11DeviceContext> = None;
-
             let adapter_base: windows::Win32::Graphics::Dxgi::IDXGIAdapter =
                 adapter.cast().map_err(|e| {
                     Error::DirectXError(format!("Cast IDXGIAdapter1 -> IDXGIAdapter: {e}"))
                 })?;
-
             unsafe {
                 D3D11CreateDevice(
                     Some(&adapter_base),
@@ -135,33 +128,27 @@ impl WindowsCapture {
                 )
             }
             .map_err(|e| Error::DirectXError(format!("D3D11CreateDevice: {e}")))?;
-
             let device = device
                 .ok_or_else(|| Error::DirectXError("D3D11CreateDevice: null device".to_string()))?;
             let context = context.ok_or_else(|| {
                 Error::DirectXError("D3D11CreateDevice: null context".to_string())
             })?;
-
             let mut has_outputs = false;
             for output_idx in 0u32.. {
                 let output: IDXGIOutput = match unsafe { adapter.EnumOutputs(output_idx) } {
                     Ok(o) => o,
                     Err(_) => break,
                 };
-
                 let desc: DXGI_OUTPUT_DESC = unsafe { output.GetDesc() }
                     .map_err(|e| Error::DirectXError(format!("GetDesc: {e}")))?;
-
                 if desc.DesktopCoordinates.right == desc.DesktopCoordinates.left
                     || desc.DesktopCoordinates.bottom == desc.DesktopCoordinates.top
                 {
                     continue;
                 }
-
                 let name = String::from_utf16_lossy(&desc.DeviceName)
                     .trim_end_matches('\0')
                     .to_string();
-
                 let rot = desc.Rotation.0 as u32;
                 let (w, h) = match rot {
                     2 | 4 => (
@@ -173,7 +160,6 @@ impl WindowsCapture {
                         desc.DesktopCoordinates.bottom - desc.DesktopCoordinates.top,
                     ),
                 };
-
                 output_info.push(OutputInfo {
                     name: name.clone(),
                     x: desc.DesktopCoordinates.left,
@@ -187,16 +173,13 @@ impl WindowsCapture {
                 });
                 has_outputs = true;
             }
-
             if has_outputs {
                 adapters.push(AdapterState { device, context });
             }
         }
-
         if output_info.is_empty() {
             return Err(Error::NoOutputs);
         }
-
         Ok(Self {
             adapters,
             output_info,
@@ -209,18 +192,14 @@ impl WindowsCapture {
         if self.dup_cache.contains_key(&info.name) {
             return Ok(());
         }
-
         let adapter_state = &self.adapters[info.adapter_idx];
-
         let adapter: IDXGIAdapter1 = unsafe { self.factory.EnumAdapters1(info.adapter_idx as u32) }
             .map_err(|e| Error::DirectXError(format!("EnumAdapters1: {e}")))?;
         let output: IDXGIOutput = unsafe { adapter.EnumOutputs(info.output_idx as u32) }
             .map_err(|e| Error::DirectXError(format!("EnumOutputs: {e}")))?;
-
         let output1: windows::Win32::Graphics::Dxgi::IDXGIOutput1 = output
             .cast()
             .map_err(|e| Error::DirectXError(format!("QueryInterface IDXGIOutput1: {e}")))?;
-
         let dup = unsafe { output1.DuplicateOutput(&adapter_state.device) }.map_err(|e| {
             if e.code() == windows::Win32::Foundation::E_ACCESSDENIED {
                 Error::ProtectedContent(format!("Output '{}' is protected by DRM", info.name))
@@ -228,7 +207,6 @@ impl WindowsCapture {
                 Error::DirectXError(format!("DuplicateOutput: {e}"))
             }
         })?;
-
         // Skip the initial blank frame that DXGI returns after DuplicateOutput.
         // The first AcquireNextFrame may return WAIT_TIMEOUT, so retry until we
         // get a real frame to discard. The pointer shape is reported with this
@@ -265,7 +243,6 @@ impl WindowsCapture {
                 break;
             }
         }
-
         self.dup_cache.insert(
             info.name.clone(),
             DupEntry {
@@ -284,7 +261,6 @@ impl WindowsCapture {
     ) -> Result<(Vec<u8>, u32, u32)> {
         let mut frame_info = DXGI_OUTDUPL_FRAME_INFO::default();
         let mut attempts = 0;
-
         loop {
             let entry = self.dup_cache.get_mut(&info.name).unwrap();
             let dup = &entry.dup;
@@ -296,7 +272,6 @@ impl WindowsCapture {
                     std::ptr::addr_of_mut!(desktop_resource),
                 )
             };
-
             match result {
                 Ok(()) => {
                     let resource = match desktop_resource {
@@ -313,19 +288,14 @@ impl WindowsCapture {
                             continue;
                         }
                     };
-
                     let adapter = &self.adapters[info.adapter_idx];
-
                     let texture: ID3D11Texture2D = resource.cast().map_err(|e| {
                         Error::DirectXError(format!("Cast IDXGIResource -> ID3D11Texture2D: {e}"))
                     })?;
-
                     let mut tex_desc = D3D11_TEXTURE2D_DESC::default();
                     unsafe { texture.GetDesc(&mut tex_desc) };
-
                     let width = tex_desc.Width;
                     let height = tex_desc.Height;
-
                     let staging_desc = D3D11_TEXTURE2D_DESC {
                         Width: width,
                         Height: height,
@@ -341,7 +311,6 @@ impl WindowsCapture {
                         CPUAccessFlags: D3D11_CPU_ACCESS_READ.0 as u32,
                         MiscFlags: 0,
                     };
-
                     let staging: ID3D11Texture2D = {
                         let mut tex: Option<ID3D11Texture2D> = None;
                         unsafe {
@@ -356,9 +325,7 @@ impl WindowsCapture {
                             Error::BufferCreation("CreateTexture2D returned null".to_string())
                         })?
                     };
-
                     unsafe { adapter.context.CopyResource(&staging, &texture) };
-
                     let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
                     unsafe {
                         adapter.context.Map(
@@ -370,7 +337,6 @@ impl WindowsCapture {
                         )
                     }
                     .map_err(|e| Error::DirectXError(format!("Map: {e}")))?;
-
                     let row_pitch = mapped.RowPitch as usize;
                     let data = unsafe {
                         std::slice::from_raw_parts(
@@ -378,16 +344,13 @@ impl WindowsCapture {
                             row_pitch * height as usize,
                         )
                     };
-
                     let pixel_bytes = (width as usize) * 4;
                     let mut pixels = Vec::with_capacity(pixel_bytes * height as usize);
                     for row in 0..height as usize {
                         let src_start = row * row_pitch;
                         pixels.extend_from_slice(&data[src_start..src_start + pixel_bytes]);
                     }
-
                     unsafe { adapter.context.Unmap(&staging, 0) };
-
                     // The shape buffer is only filled when the shape changed;
                     // refresh the cached shape before releasing the frame.
                     if overlay_cursor && frame_info.PointerShapeBufferSize > 0 {
@@ -400,12 +363,9 @@ impl WindowsCapture {
                     if frame_info.LastMouseUpdateTime != 0 || entry.pointer_position.is_none() {
                         entry.pointer_position = Some(frame_info.PointerPosition);
                     }
-
                     unsafe { dup.ReleaseFrame() }
                         .map_err(|e| Error::DirectXError(format!("ReleaseFrame: {e}")))?;
-
                     pixel_format::convert_to_rgba(&mut pixels, PixelFormat::Argb8888);
-
                     // The shape comes from the cache because DXGI only resends
                     // it when it changes; the position is the last one DXGI
                     // reported (frames without mouse movement carry no update).
@@ -420,7 +380,6 @@ impl WindowsCapture {
                             if let Some(CachedCursorShape { info, buf }) = &entry.cursor_shape {
                                 let screen_x = pointer.Position.x - info.HotSpot.x;
                                 let screen_y = pointer.Position.y - info.HotSpot.y;
-
                                 if info.Type == DXGI_OUTDUPL_POINTER_SHAPE_TYPE_MONOCHROME.0 as u32
                                 {
                                     // A monochromatic shape packs two 1bpp masks;
@@ -451,7 +410,6 @@ impl WindowsCapture {
                             }
                         }
                     }
-
                     return Ok((pixels, width, height));
                 }
                 Err(e) if e.code() == DXGI_ERROR_WAIT_TIMEOUT => {
@@ -521,12 +479,9 @@ impl WindowsCapture {
                 "Capture region origin must be non-negative".to_string(),
             ));
         }
-
         let info = self.find_output(output_name)?;
         self.get_dup(&info)?;
-
         let (full_pixels, full_width, full_height) = self.capture_frame(&info, overlay_cursor)?;
-
         // Apply rotation transform FIRST — the DXGI texture is in GPU-native
         // orientation, but the crop region is in logical (post-rotation) coords.
         use crate::transform::{apply_image_transform, OutputTransform};
@@ -538,13 +493,11 @@ impl WindowsCapture {
         };
         let (mut final_data, mut final_width, mut final_height) =
             apply_image_transform(&full_pixels, full_width, full_height, transform);
-
         // Crop to the requested region (now in logical coords matching the image)
         let crop_x = region.x() as u32;
         let crop_y = region.y() as u32;
         let crop_w = region.width() as u32;
         let crop_h = region.height() as u32;
-
         if crop_x > 0 || crop_y > 0 || crop_w != final_width || crop_h != final_height {
             let (cropped, cw, ch) = crate::compositor::crop_rgba(
                 &final_data,
@@ -559,7 +512,6 @@ impl WindowsCapture {
             final_width = cw;
             final_height = ch;
         }
-
         Ok(CaptureResult {
             data: final_data,
             width: final_width,
@@ -573,11 +525,9 @@ impl WindowsCapture {
             .iter()
             .map(|o| (o.name.clone(), Region::new(o.x, o.y, o.width, o.height)))
             .collect();
-
         if outputs.is_empty() {
             return Err(Error::NoOutputs);
         }
-
         let mut min_x = i32::MAX;
         let mut min_y = i32::MAX;
         let mut max_x = i32::MIN;
@@ -588,7 +538,6 @@ impl WindowsCapture {
             max_x = max_x.max(geom.x() + geom.width());
             max_y = max_y.max(geom.y() + geom.height());
         }
-
         let region = Region::new(min_x, min_y, max_x - min_x, max_y - min_y);
         crate::compositor::composite_region(
             region,
@@ -646,7 +595,6 @@ impl WindowsCapture {
         parameters: Vec<CaptureParameters>,
     ) -> Result<MultiOutputCaptureResult> {
         let mut results = HashMap::new();
-
         for param in &parameters {
             let output_name = param.output_name().to_string();
             let region = if let Some(r) = param.region_ref() {
@@ -659,7 +607,6 @@ impl WindowsCapture {
                 self.capture_output_raw(&output_name, region, param.overlay_cursor_enabled())?;
             results.insert(output_name, capture);
         }
-
         Ok(MultiOutputCaptureResult::new(results))
     }
 
@@ -670,12 +617,10 @@ impl WindowsCapture {
     ) -> Result<MultiOutputCaptureResult> {
         let result = self.capture_outputs(parameters)?;
         let mut scaled_results = HashMap::new();
-
         for (output_name, capture_result) in result.into_outputs() {
             let scaled = crate::scaling::scale_image_data(capture_result, default_scale)?;
             scaled_results.insert(output_name, scaled);
         }
-
         Ok(MultiOutputCaptureResult::new(scaled_results))
     }
 }

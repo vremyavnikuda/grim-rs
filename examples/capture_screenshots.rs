@@ -9,11 +9,10 @@
 //!
 //! All screenshots are saved to the `examples/` directory.
 
-use chrono::Local;
-use grim_rs::{CaptureParameters, Grim, Region, Result};
+use grim_rs::{CaptureParameters, Grim, LocalDateTime, Region, Result};
 
 fn filename(label: &str, ext: &str) -> String {
-    let ts = Local::now().format("%Y%m%d_%H%M%S");
+    let ts = LocalDateTime::now();
     format!("examples/{}_{}.{}", ts, label, ext)
 }
 

@@ -478,7 +478,6 @@ mod y_invert_tests {
     fn test_frame_state_flags_field() {
         let flags: u32 = 0;
         assert_eq!(flags, 0);
-
         let flags_with_invert: u32 = 1;
         assert_eq!(flags_with_invert, 1);
     }
@@ -490,7 +489,6 @@ fn test_mock_capture() {
         let mut grim = Grim::new().unwrap();
         grim.capture_all()
     });
-
     match result {
         Ok(capture_result) => {
             if let Ok(capture) = capture_result {

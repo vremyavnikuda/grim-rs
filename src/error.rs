@@ -3,42 +3,25 @@ use std::fmt;
 #[derive(Debug)]
 pub enum Error {
     InvalidGeometry(String),
-
     NoOutputs,
-
     OutputNotFound(String),
-
     InvalidRegion(String),
-
     CaptureFailed,
-
     BufferCreation(String),
-
     ImageProcessing(image::ImageError),
-
     Io(std::io::Error),
-
     IoWithContext {
         operation: String,
         source: std::io::Error,
     },
-
     UnsupportedProtocol(String),
-
     WaylandConnection(String),
-
     FrameCapture(String),
-
     TransformNotSupported(String),
-
     InvertFailed(String),
-
     ScalingFailed(String),
-
     DirectXError(String),
-
     ProtectedContent(String),
-
     NoGpuAdapter,
 }
 

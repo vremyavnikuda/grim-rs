@@ -17,41 +17,44 @@
 //! ## Example
 //!
 //! ```rust,no_run
-//! use grim_rs::Grim;
-//! use chrono::Local;
+//! use grim_rs::{Grim, LocalDateTime};
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let mut grim = Grim::new()?;
 //! let result = grim.capture_all()?;
 //!
 //! // Generate timestamped filename (like grim-rs does by default)
-//! let filename = format!("{}_grim.png", Local::now().format("%Y%m%d_%Hh%Mm%Ss"));
+//! let filename = format!("{}_grim.png", LocalDateTime::now());
 //! grim.save_png(result.data(), result.width(), result.height(), &filename)?;
 //! # Ok(())
 //! # }
 //! ```
 
+mod buffer;
+mod compositor;
 pub mod error;
 pub mod geometry;
 pub mod pixel_format;
-
-mod buffer;
-mod compositor;
 mod platform;
 mod scaling;
+mod timestamp;
 mod transform;
 
 pub use error::{Error, Result};
 pub use geometry::Region;
+pub use timestamp::LocalDateTime;
 
 #[doc(hidden)]
 pub use buffer::checked_buffer_size;
+
 #[cfg(target_os = "windows")]
 #[doc(hidden)]
 pub use platform::windows::blend_cursor_rgba;
+
 #[cfg(target_os = "windows")]
 #[doc(hidden)]
 pub use platform::windows::blend_mono_cursor_rgba;
+
 #[doc(hidden)]
 pub use transform::{apply_image_transform, rotate_180, rotate_270, rotate_90, OutputTransform};
 
@@ -759,15 +762,14 @@ impl Grim {
     /// # Example
     ///
     /// ```rust,no_run
-    /// use grim_rs::Grim;
-    /// use chrono::Local;
+    /// use grim_rs::{Grim, LocalDateTime};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
     ///
     /// // Generate timestamped filename
-    /// let filename = format!("{}_grim.png", Local::now().format("%Y%m%d_%Hh%Mm%Ss"));
+    /// let filename = format!("{}_grim.png", LocalDateTime::now());
     /// grim.save_png(result.data(), result.width(), result.height(), &filename)?;
     /// # Ok(())
     /// # }
@@ -822,15 +824,14 @@ impl Grim {
     /// # Example
     ///
     /// ```rust,no_run
-    /// use grim_rs::Grim;
-    /// use chrono::Local;
+    /// use grim_rs::{Grim, LocalDateTime};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
     ///
     /// // Generate timestamped filename
-    /// let filename = format!("{}_grim.png", Local::now().format("%Y%m%d_%Hh%Mm%Ss"));
+    /// let filename = format!("{}_grim.png", LocalDateTime::now());
     /// grim.save_png_with_compression(result.data(), result.width(), result.height(), &filename, 9)?;
     /// # Ok(())
     /// # }
@@ -845,33 +846,26 @@ impl Grim {
         compression: u8,
     ) -> Result<()> {
         use std::io::BufWriter;
-
         validate_rgba(data, width, height)?;
-
         let file = std::fs::File::create(&path).map_err(|e| Error::IoWithContext {
             operation: format!("creating output file '{}'", path.as_ref().display()),
             source: e,
         })?;
         let writer = BufWriter::new(file);
         let mut encoder = png::Encoder::new(writer, width, height);
-
         let compression_level = png_compression_level(compression);
         encoder.set_compression(compression_level);
-
         encoder.set_color(png::ColorType::Rgba);
         encoder.set_filter(png::FilterType::NoFilter);
-
         let mut writer = encoder
             .write_header()
             .map_err(|e| Error::Io(std::io::Error::other(format!("PNG encoding error: {}", e))))?;
-
         writer
             .write_image_data(data)
             .map_err(|e| Error::Io(std::io::Error::other(format!("PNG encoding error: {}", e))))?;
         writer
             .finish()
             .map_err(|e| Error::Io(std::io::Error::other(format!("PNG encoding error: {}", e))))?;
-
         Ok(())
     }
 
@@ -917,15 +911,14 @@ impl Grim {
     /// # Example
     ///
     /// ```rust,no_run
-    /// use grim_rs::Grim;
-    /// use chrono::Local;
+    /// use grim_rs::{Grim, LocalDateTime};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
     ///
     /// // Generate timestamped filename
-    /// let filename = format!("{}_grim.jpg", Local::now().format("%Y%m%d_%Hh%Mm%Ss"));
+    /// let filename = format!("{}_grim.jpg", LocalDateTime::now());
     /// grim.save_jpeg(result.data(), result.width(), result.height(), &filename)?;
     /// # Ok(())
     /// # }
@@ -965,15 +958,14 @@ impl Grim {
     /// # Example
     ///
     /// ```rust,no_run
-    /// use grim_rs::Grim;
-    /// use chrono::Local;
+    /// use grim_rs::{Grim, LocalDateTime};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut grim = Grim::new()?;
     /// let result = grim.capture_all()?;
     ///
     /// // Generate timestamped filename
-    /// let filename = format!("{}_grim.jpg", Local::now().format("%Y%m%d_%Hh%Mm%Ss"));
+    /// let filename = format!("{}_grim.jpg", LocalDateTime::now());
     /// grim.save_jpeg_with_quality(result.data(), result.width(), result.height(), &filename, 90)?;
     /// # Ok(())
     /// # }
@@ -990,13 +982,11 @@ impl Grim {
         validate_rgba(data, width, height)?;
         validate_jpeg_dimensions(width, height)?;
         let rgb_data = rgba_to_rgb(data)?;
-
         let mut output_file = std::fs::File::create(&path).map_err(|e| Error::IoWithContext {
             operation: format!("creating output file '{}'", path.as_ref().display()),
             source: e,
         })?;
         let mut _encoder = jpeg_encoder::Encoder::new(&mut output_file, quality);
-
         _encoder
             .encode(
                 &rgb_data,
@@ -1005,7 +995,6 @@ impl Grim {
                 jpeg_encoder::ColorType::Rgb,
             )
             .map_err(|e| Error::Io(std::io::Error::other(format!("JPEG encoding error: {}", e))))?;
-
         Ok(())
     }
 
@@ -1139,10 +1128,8 @@ impl Grim {
         validate_rgba(data, width, height)?;
         validate_jpeg_dimensions(width, height)?;
         let rgb_data = rgba_to_rgb(data)?;
-
         let mut jpeg_data = Vec::new();
         let mut _encoder = jpeg_encoder::Encoder::new(&mut jpeg_data, quality);
-
         _encoder
             .encode(
                 &rgb_data,
@@ -1151,7 +1138,6 @@ impl Grim {
                 jpeg_encoder::ColorType::Rgb,
             )
             .map_err(|e| Error::Io(std::io::Error::other(format!("JPEG encoding error: {}", e))))?;
-
         Ok(jpeg_data)
     }
 
@@ -1282,24 +1268,18 @@ impl Grim {
         compression: u8,
     ) -> Result<Vec<u8>> {
         use std::io::Cursor;
-
         validate_rgba(data, width, height)?;
-
         let mut output = Vec::new();
         {
             let writer = Cursor::new(&mut output);
             let mut encoder = png::Encoder::new(writer, width, height);
-
             let compression_level = png_compression_level(compression);
             encoder.set_compression(compression_level);
-
             encoder.set_color(png::ColorType::Rgba);
             encoder.set_filter(png::FilterType::NoFilter);
-
             let mut writer = encoder.write_header().map_err(|e| {
                 Error::Io(std::io::Error::other(format!("PNG encoding error: {}", e)))
             })?;
-
             writer.write_image_data(data).map_err(|e| {
                 Error::Io(std::io::Error::other(format!("PNG encoding error: {}", e)))
             })?;
@@ -1307,7 +1287,6 @@ impl Grim {
                 Error::Io(std::io::Error::other(format!("PNG encoding error: {}", e)))
             })?;
         }
-
         Ok(output)
     }
 
@@ -1355,16 +1334,12 @@ impl Grim {
     /// ```
     pub fn read_region_from_stdin() -> Result<Region> {
         use std::io::{self, BufRead};
-
         let stdin = io::stdin();
         let mut handle = stdin.lock();
         let mut line = String::new();
-
         handle.read_line(&mut line)?;
-
         // Remove newline characters
         line = line.trim_end().to_string();
-
         line.parse()
     }
 
