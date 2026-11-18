@@ -29,7 +29,7 @@ jobs:
             const labels = [];
 
             // Authoritative machine metadata: a single invisible HTML comment
-            // line, e.g. <!-- grim: kind=bug platform=windows priority=high -->
+            // line, e.g. <!-- grim: kind=bug platform=windows -->
             const grim = body.match(/<!--\s*grim\s*:\s*([^>]*)-->/i);
             if (grim) {
               const kv = {};
@@ -42,8 +42,10 @@ jobs:
               if (kv.platform === 'windows') labels.push('platform:windows');
               else if (kv.platform === 'linux') labels.push('platform:linux');
               else if (kv.platform === 'both' || kv.platform === 'cross' || kv.platform === 'all') labels.push('platform:cross');
-              if (/^(critical|high|medium|low)$/.test(kv.priority || '')) labels.push('priority:' + kv.priority);
             }
+
+            // Note: priority is never assigned automatically — it is set by
+            // the maintainer during triage.
 
             // Deterministic fields from the issue template (or an explicit
             // metadata block): "Kind: <type>" and "Platform: <value>".
@@ -59,8 +61,6 @@ jobs:
               labels.push(v === 'windows' ? 'platform:windows' : (v.startsWith('linux') ? 'platform:linux' : 'platform:cross'));
             }
 
-            const prio = body.match(/^\s*[-*>]?\s*priority\s*:\s*(critical|high|medium|low)\s*$/im);
-            if (prio) labels.push('priority:' + prio[1].toLowerCase());
 
             // Keyword fallback for issues not created from a template.
             if (!labels.some(l => KINDS.includes(l))) {
