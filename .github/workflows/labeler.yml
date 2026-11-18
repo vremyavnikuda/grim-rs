@@ -27,63 +27,24 @@ jobs:
             const text = title + '\n' + body.toLowerCase();
 
             const labels = [];
+            const TYPES = ['bug', 'enhancement', 'documentation', 'refactor', 'question', 'performance'];
 
-            // The grim metadata comment is authoritative ONLY when the issue
-            // author is the repository owner; anyone else can inject the
-            // comment, so for them it is ignored and classification falls
-            // back to form fields and keywords below.
-            const TRUSTED = ['vremyavnikuda'];
-            const grim = TRUSTED.includes(context.payload.issue.user.login)
-              ? body.match(/<!--\s*grim\s*:\s*([^>]*)-->/i)
-              : null;
-            if (grim) {
-              const kv = {};
-              for (const pair of grim[1].trim().split(/\s+/)) {
-                const i = pair.indexOf('=');
-                if (i > 0) kv[pair.slice(0, i).toLowerCase()] = pair.slice(i + 1).toLowerCase();
-              }
-              const KINDS = ['bug', 'enhancement', 'documentation', 'refactor', 'question', 'performance'];
-              if (KINDS.includes(kv.kind)) labels.push(kv.kind);
-              if (kv.platform === 'windows') labels.push('platform:windows');
-              else if (kv.platform === 'linux') labels.push('platform:linux');
-              else if (kv.platform === 'both' || kv.platform === 'cross' || kv.platform === 'all') labels.push('platform:cross');
-
-              // Sync: the marker is the owner's explicit intent, so managed
-              // labels (type + platform) must match it exactly — remove the
-              // ones that no longer match instead of accumulating duplicates.
-              const MANAGED = [...KINDS, 'platform:windows', 'platform:linux', 'platform:cross'];
-              const current = await github.rest.issues.listLabelsOnIssue({
-                owner, repo, issue_number: context.payload.issue.number,
-              });
-              for (const name of current.data.map(l => l.name)) {
-                if (MANAGED.includes(name) && !labels.includes(name)) {
-                  await github.rest.issues.removeLabel({
-                    owner, repo, issue_number: context.payload.issue.number, name,
-                  }).catch(() => {});
-                }
-              }
+            // Type: sections produced by the issue templates.
+            if (/^#+\s*what happened\??\s*$/im.test(body)) {
+              labels.push('bug');
+            } else if (/^#+\s*details\s*$/im.test(body)) {
+              labels.push('enhancement');
             }
 
-            // Note: priority is never assigned automatically — it is set by
-            // the maintainer during triage.
-
-            // Deterministic fields from the issue template (or an explicit
-            // metadata block): "Kind: <type>" and "Platform: <value>".
-            const KINDS = ['bug', 'enhancement', 'documentation', 'refactor', 'question', 'performance'];
-            const kindMatch = body.match(/^\s*[-*>]?\s*(?:kind|type)\s*:\s*(bug|enhancement|documentation|refactor|question|performance)\s*$/im);
-            if (kindMatch) labels.push(kindMatch[1].toLowerCase());
-
-            const platColon = body.match(/^\s*[-*>]?\s*platform\s*:\s*(windows|linux|both|cross|all)\s*$/im);
-            const platHeading = body.match(/^#+\s*platform\s*\n+\s*(windows|linux\s*\/\s*wayland|both|cross|all)\s*$/im);
-            const plat = platColon || platHeading;
-            if (plat) {
-              const v = plat[1].toLowerCase();
+            // Platform: the Platform section of the issue template.
+            const platHeading = body.match(/^#+\s*platform\s*\n+[\s>*-]*\s*(windows|linux\s*\/\s*wayland|both|cross|all)\s*$/im);
+            if (platHeading) {
+              const v = platHeading[1].toLowerCase();
               labels.push(v === 'windows' ? 'platform:windows' : (v.startsWith('linux') ? 'platform:linux' : 'platform:cross'));
             }
 
-
             // Keyword fallback for issues not created from a template.
-            if (!labels.some(l => KINDS.includes(l))) {
+            if (!labels.some(l => TYPES.includes(l))) {
               const rules = [
                 ['bug', /\b(panic|crash|segfault|regression|broken|error)\b/],
                 ['enhancement', /\b(feature|support for|would be nice|please implement|coverage)\b/],

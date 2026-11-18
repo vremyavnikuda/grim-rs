@@ -1,9 +1,6 @@
 name: Feature request
 description: Suggest an improvement or new capability
 body:
-  - type: markdown
-    attributes:
-      value: "<!-- grim: kind=enhancement -->"
   - type: dropdown
     id: platform
     attributes:

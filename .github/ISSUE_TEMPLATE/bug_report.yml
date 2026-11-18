@@ -1,9 +1,6 @@
 name: Bug report
 description: Something is not working as expected
 body:
-  - type: markdown
-    attributes:
-      value: "<!-- grim: kind=bug -->"
   - type: dropdown
     id: platform
     attributes:
