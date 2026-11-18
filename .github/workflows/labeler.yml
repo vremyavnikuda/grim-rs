@@ -5,6 +5,9 @@ on:
     types: [opened, edited]
   pull_request_target:
     types: [opened, edited]
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -12,6 +15,37 @@ permissions:
   pull-requests: write
 
 jobs:
+  development-status:
+    name: Mark issues with linked development as in progress
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Scan open issues for development links
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'open', per_page: 100,
+            });
+            for (const issue of issues) {
+              const timeline = await github.paginate(github.rest.issues.listEventsForTimeline, {
+                owner, repo, issue_number: issue.number, per_page: 100,
+              });
+              // "connected" is the timeline event for a branch or pull
+              // request linked in the Development section.
+              if (!timeline.some(e => e.event === 'connected')) continue;
+              const labels = await github.paginate(github.rest.issues.listLabelsOnIssue, {
+                owner, repo, issue_number: issue.number, per_page: 100,
+              });
+              if (!labels.some(l => l.name === 'status:in-progress')) {
+                await github.rest.issues.addLabels({
+                  owner, repo, issue_number: issue.number, labels: ['status:in-progress'],
+                });
+                core.info(`#${issue.number}: status:in-progress added (development linked)`);
+              }
+            }
+
   label:
     name: Assign type and platform labels
     runs-on: ubuntu-latest
