@@ -61,7 +61,7 @@
   },
   {
     "name": "triage:confirmed",
-    "color": "0e8a16",
+    "color": "C5B4F3",
     "description": "Maintainer confirmed classification; form synchronization is paused"
   },
   {
@@ -171,7 +171,7 @@
   },
   {
     "name": "status:ready-to-merge",
-    "color": "0E8A16",
+    "color": "00BFA5",
     "description": "Approved and ready for merger"
   }
 ]
