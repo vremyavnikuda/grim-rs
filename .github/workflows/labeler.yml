@@ -28,9 +28,14 @@ jobs:
 
             const labels = [];
 
-            // Authoritative machine metadata: a single invisible HTML comment
-            // line, e.g. <!-- grim: kind=bug platform=windows -->
-            const grim = body.match(/<!--\s*grim\s*:\s*([^>]*)-->/i);
+            // The grim metadata comment is authoritative ONLY when the issue
+            // author is the repository owner; anyone else can inject the
+            // comment, so for them it is ignored and classification falls
+            // back to form fields and keywords below.
+            const TRUSTED = ['vremyavnikuda'];
+            const grim = TRUSTED.includes(context.payload.issue.user.login)
+              ? body.match(/<!--\s*grim\s*:\s*([^>]*)-->/i)
+              : null;
             if (grim) {
               const kv = {};
               for (const pair of grim[1].trim().split(/\s+/)) {
