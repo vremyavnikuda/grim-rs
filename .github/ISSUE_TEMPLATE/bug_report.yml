@@ -1,0 +1,43 @@
+name: Bug report
+description: Something is not working as expected
+body:
+  - type: markdown
+    attributes:
+      value: "Kind: bug"
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      description: Which platform does the problem belong to?
+      options:
+        - Windows
+        - Linux / Wayland
+        - Both
+    validations:
+      required: true
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: One line describing the problem
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Steps and the actual output (error text, log); for non-reproducible conditions describe the required setup
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true

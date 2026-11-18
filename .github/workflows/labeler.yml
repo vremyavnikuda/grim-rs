@@ -13,32 +13,55 @@ permissions:
 
 jobs:
   label:
-    name: Assign type and status labels
+    name: Assign type and platform labels
     runs-on: ubuntu-latest
     steps:
-      - name: Label issue by keywords
+      - name: Label issue
         if: github.event_name == 'issues'
         uses: actions/github-script@v7
         with:
           script: |
             const { owner, repo } = context.repo;
             const title = context.payload.issue.title.toLowerCase();
-            const body = (context.payload.issue.body || '').toLowerCase();
-            const text = title + '\n' + body;
-            const rules = [
-              ['bug', /\b(panic|crash|segfault|regression|broken|error)\b/],
-              ['enhancement', /\b(feature|support for|would be nice|please implement|coverage)\b/],
-              ['question', /\b(how (do|can) i|how to|question)\b/],
-              ['documentation', /\b(documentation|docs|readme|changelog|typo)\b/],
-              ['refactor', /\b(refactor|cleanup|unused|dead code)\b/],
-            ];
-            const platforms = [
-              ['platform:windows', /\b(windows|dxgi|d3d11)\b/],
-              ['platform:linux', /\b(linux|wayland|wlroots|sway|hyprland|niri|river|wayfire|cosmic)\b/],
-            ];
-            const matched = platforms.filter(([, re]) => re.test(text)).map(([l]) => l);
-            const labels = rules.filter(([, re]) => re.test(text)).map(([l]) => l)
-              .concat(matched.length ? matched : ['platform:cross']);
+            const body = context.payload.issue.body || '';
+            const text = title + '\n' + body.toLowerCase();
+
+            const labels = [];
+
+            // Deterministic fields from the issue template (or an explicit
+            // metadata block): "Kind: <type>" and "Platform: <value>".
+            const KINDS = ['bug', 'enhancement', 'documentation', 'refactor', 'question', 'performance'];
+            const kindMatch = body.match(/^\s*[-*>]?\s*(?:kind|type)\s*:\s*(bug|enhancement|documentation|refactor|question|performance)\s*$/im);
+            if (kindMatch) labels.push(kindMatch[1].toLowerCase());
+
+            const platColon = body.match(/^\s*[-*>]?\s*platform\s*:\s*(windows|linux|both|cross|all)\s*$/im);
+            const platHeading = body.match(/^#+\s*platform\s*\n+\s*(windows|linux\s*\/\s*wayland|both|cross|all)\s*$/im);
+            const plat = platColon || platHeading;
+            if (plat) {
+              const v = plat[1].toLowerCase();
+              labels.push(v === 'windows' ? 'platform:windows' : (v.startsWith('linux') ? 'platform:linux' : 'platform:cross'));
+            }
+
+            // Keyword fallback for issues not created from a template.
+            if (!labels.some(l => KINDS.includes(l))) {
+              const rules = [
+                ['bug', /\b(panic|crash|segfault|regression|broken|error)\b/],
+                ['enhancement', /\b(feature|support for|would be nice|please implement|coverage)\b/],
+                ['question', /\b(how (do|can) i|how to|question)\b/],
+                ['documentation', /\b(documentation|docs|readme|changelog|typo)\b/],
+                ['refactor', /\b(refactor|cleanup|unused|dead code)\b/],
+              ];
+              labels.push(...rules.filter(([, re]) => re.test(text)).map(([l]) => l));
+            }
+            if (!labels.some(l => l.startsWith('platform:'))) {
+              const windows = /\b(windows|dxgi|d3d11)\b/.test(text);
+              const linux = /\b(linux|wayland|wlroots|sway|hyprland|niri|river|wayfire|cosmic)\b/.test(text);
+              if (windows && !linux) labels.push('platform:windows');
+              else if (linux && !windows) labels.push('platform:linux');
+              else if (windows && linux) labels.push('platform:windows', 'platform:linux');
+              else labels.push('platform:cross');
+            }
+
             if (labels.length) {
               await github.rest.issues.addLabels({
                 owner, repo,
@@ -47,7 +70,7 @@ jobs:
               });
             }
 
-      - name: Label PR by conventional title and draft state
+      - name: Label pull request
         if: github.event_name == 'pull_request_target'
         uses: actions/github-script@v7
         with:
@@ -74,14 +97,12 @@ jobs:
               }
             }
             const prText = title + '\n' + ((pr.body || '')).toLowerCase();
-            const prPlatforms = [];
-            if (/\b(windows|dxgi|d3d11)\b/.test(prText)) {
-              prPlatforms.push('platform:windows');
-            }
-            if (/\b(linux|wayland|wlroots|sway|hyprland|niri|river|wayfire|cosmic)\b/.test(prText)) {
-              prPlatforms.push('platform:linux');
-            }
-            labels.push(...(prPlatforms.length ? prPlatforms : ['platform:cross']));
+            const windows = /\b(windows|dxgi|d3d11)\b/.test(prText);
+            const linux = /\b(linux|wayland|wlroots|sway|hyprland|niri|river|wayfire|cosmic)\b/.test(prText);
+            if (windows && !linux) labels.push('platform:windows');
+            else if (linux && !windows) labels.push('platform:linux');
+            else if (windows && linux) labels.push('platform:windows', 'platform:linux');
+            else labels.push('platform:cross');
             labels.push(pr.draft ? 'status:in-progress' : 'status:needs-review');
             await github.rest.issues.addLabels({
               owner, repo,
