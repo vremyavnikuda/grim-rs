@@ -1,28 +1,65 @@
 name: Feature request
-description: Suggest an improvement or new capability
+description: Suggest a capability or improvement
 body:
   - type: dropdown
-    id: platform
+    id: issue-kind
     attributes:
-      label: Platform
-      description: Which platform is this for?
+      label: Issue kind
       options:
-        - Both
+        - Feature request
+      default: 0
+    validations:
+      required: true
+  - type: dropdown
+    id: platforms
+    attributes:
+      label: Affected platforms
+      description: Select affected systems, or one exclusive Unknown / Not platform-specific answer.
+      multiple: true
+      options:
         - Windows
-        - Linux / Wayland
+        - Linux
+        - Unknown
+        - Not platform-specific
+    validations:
+      required: true
+  - type: dropdown
+    id: backends
+    attributes:
+      label: Linux backends
+      description: Select the Linux backends involved. X11 support is planned. For Windows-only or general API topics, select Not applicable. Other / Unknown / Not applicable must be selected alone.
+      multiple: true
+      options:
+        - Wayland
+        - X11
+        - Other
+        - Unknown
+        - Not applicable
     validations:
       required: true
   - type: input
-    id: summary
+    id: other-backend
     attributes:
-      label: Summary
-      description: One line describing the request
+      label: Other backend
+      description: If you selected Other, name it here.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What task or limitation motivates this request?
     validations:
       required: true
   - type: textarea
-    id: details
+    id: proposal
     attributes:
-      label: Details
-      description: What and why; current behavior if relevant
+      label: Proposed behavior
+      description: What should the library do?
     validations:
       required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and context
+      description: Other approaches you considered and any useful context.
+    validations:
+      required: false

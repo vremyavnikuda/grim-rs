@@ -1,0 +1,177 @@
+[
+  {
+    "name": "bug",
+    "color": "D73A49",
+    "description": "Something isn't working"
+  },
+  {
+    "name": "enhancement",
+    "color": "a2eeef",
+    "description": "New feature or request"
+  },
+  {
+    "name": "question",
+    "color": "d876e3",
+    "description": "Question about usage or behavior"
+  },
+  {
+    "name": "documentation",
+    "color": "0075ca",
+    "description": "Improvements or additions to documentation"
+  },
+  {
+    "name": "performance",
+    "color": "FF9500",
+    "description": "Performance improvements or optimizations"
+  },
+  {
+    "name": "refactor",
+    "color": "FBCA04",
+    "description": "Refactoring code without functional"
+  },
+  {
+    "name": "dependencies",
+    "color": "0366D6",
+    "description": "Dependency updates or management"
+  },
+  {
+    "name": "platform:windows",
+    "color": "1D76DB",
+    "description": "Affects Windows, independently of capture backend"
+  },
+  {
+    "name": "platform:linux",
+    "color": "0E8A16",
+    "description": "Affects Linux, independently of capture backend"
+  },
+  {
+    "name": "platform:cross",
+    "color": "8250DF",
+    "description": "Legacy classification; review individually before replacing"
+  },
+  {
+    "name": "backend:wayland",
+    "color": "1d76db",
+    "description": "Wayland capture backend"
+  },
+  {
+    "name": "backend:x11",
+    "color": "1d76db",
+    "description": "X11 backend context or requested support"
+  },
+  {
+    "name": "triage:confirmed",
+    "color": "0e8a16",
+    "description": "Maintainer confirmed classification; form synchronization is paused"
+  },
+  {
+    "name": "priority:critical",
+    "color": "B60205",
+    "description": "Critical tasks blocking releases"
+  },
+  {
+    "name": "priority:high",
+    "color": "D73A49",
+    "description": "High priority, to be resolved soon"
+  },
+  {
+    "name": "priority:medium",
+    "color": "FBCA04",
+    "description": "Medium priority, normal time frame"
+  },
+  {
+    "name": "priority:low",
+    "color": "28A745",
+    "description": "Low priority, can be postponed"
+  },
+  {
+    "name": "needs-investigation",
+    "color": "0075CA",
+    "description": "Requires research before implementation"
+  },
+  {
+    "name": "needs-reproduction",
+    "color": "FBCA04",
+    "description": "The bug requires playback steps."
+  },
+  {
+    "name": "waiting-for-feedback",
+    "color": "D4C5F9",
+    "description": "Awaiting feedback from the author or reviewer"
+  },
+  {
+    "name": "help wanted",
+    "color": "006B75",
+    "description": "Extra attention is needed"
+  },
+  {
+    "name": "good first issue",
+    "color": "7057FF",
+    "description": "Good for newcomers"
+  },
+  {
+    "name": "stale",
+    "color": "FFEAA7",
+    "description": "The task has been inactive for a long period of time."
+  },
+  {
+    "name": "duplicate",
+    "color": "cfd3d7",
+    "description": "This issue or pull request already exists"
+  },
+  {
+    "name": "invalid",
+    "color": "e4e669",
+    "description": "This doesn't seem right"
+  },
+  {
+    "name": "wontfix",
+    "color": "ffffff",
+    "description": "This will not be worked on"
+  },
+  {
+    "name": "blocker:manual",
+    "color": "b60205",
+    "description": "Maintainer-managed blocker; explain its resolution condition"
+  },
+  {
+    "name": "blocker:merge-conflict",
+    "color": "b60205",
+    "description": "Current merge conflict in an open pull request"
+  },
+  {
+    "name": "blocker:ci",
+    "color": "b60205",
+    "description": "Mandatory CI failed and has not yet fully passed"
+  },
+  {
+    "name": "status:blocked",
+    "color": "D93F0B",
+    "description": "At least one blocking cause exists"
+  },
+  {
+    "name": "status:in-progress",
+    "color": "FBCA04",
+    "description": "Issue has active Development, or PR is a draft"
+  },
+  {
+    "name": "status:need-review",
+    "color": "0E8A16",
+    "description": "Issue needs triage, or PR awaits review"
+  },
+  {
+    "name": "status:needs-rework",
+    "color": "5c1666",
+    "description": "Returned for rework after review"
+  },
+  {
+    "name": "status:needs-testing",
+    "color": "1F77B4",
+    "description": "Requires testing before merging"
+  },
+  {
+    "name": "status:ready-to-merge",
+    "color": "0E8A16",
+    "description": "Approved and ready for merger"
+  }
+]

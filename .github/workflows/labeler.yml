@@ -2,148 +2,49 @@ name: Labeler
 
 on:
   issues:
-    types: [opened, edited]
+    types: [opened, edited, reopened, closed, labeled, unlabeled]
   pull_request_target:
-    types: [opened, edited]
+    types: [opened, edited, reopened, closed, synchronize, ready_for_review, converted_to_draft, labeled, unlabeled]
+  workflow_run:
+    workflows: [CI, Tests, PR Quality]
+    types: [completed]
   schedule:
     - cron: '*/15 * * * *'
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Report changes without applying them
+        type: boolean
+        default: true
 
 permissions:
   contents: read
+  actions: read
+  checks: read
   issues: write
   pull-requests: write
 
+concurrency:
+  group: label-policy
+  queue: max
+  cancel-in-progress: false
+
 jobs:
-  development-status:
-    name: Mark issues with linked development as in progress
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+  reconcile:
+    name: Synchronize owned labels
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - name: Scan open issues for development links
-        uses: actions/github-script@v7
+      - name: Checkout trusted default branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Reconcile labels
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         with:
           script: |
-            const { owner, repo } = context.repo;
-            const issues = await github.paginate(github.rest.issues.listForRepo, {
-              owner, repo, state: 'open', per_page: 100,
-            });
-            for (const issue of issues) {
-              const timeline = await github.paginate(github.rest.issues.listEventsForTimeline, {
-                owner, repo, issue_number: issue.number, per_page: 100,
-              });
-              // "connected" is the timeline event for a branch or pull
-              // request linked in the Development section.
-              if (!timeline.some(e => e.event === 'connected')) continue;
-              const labels = await github.paginate(github.rest.issues.listLabelsOnIssue, {
-                owner, repo, issue_number: issue.number, per_page: 100,
-              });
-              if (!labels.some(l => l.name === 'status:in-progress')) {
-                await github.rest.issues.addLabels({
-                  owner, repo, issue_number: issue.number, labels: ['status:in-progress'],
-                });
-                core.info(`#${issue.number}: status:in-progress added (development linked)`);
-              }
-            }
-
-  label:
-    name: Assign type and platform labels
-    runs-on: ubuntu-latest
-    steps:
-      - name: Label issue
-        if: github.event_name == 'issues'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { owner, repo } = context.repo;
-            const body = context.payload.issue.body || '';
-            // Keyword scanning uses the body only. The title is untrusted
-            // signal for free-form issues (anyone can write "error" there);
-            // form-structured issues get their type from the template
-            // sections and never reach the keyword rules.
-            const text = body.toLowerCase();
-
-            const labels = [];
-            const TYPES = ['bug', 'enhancement', 'documentation', 'refactor', 'question', 'performance'];
-
-            // Type: sections produced by the issue templates.
-            if (/^#+\s*what happened\??\s*$/im.test(body)) {
-              labels.push('bug');
-            } else if (/^#+\s*details\s*$/im.test(body)) {
-              labels.push('enhancement');
-            }
-
-            // Platform: the Platform section of the issue template.
-            const platHeading = body.match(/^#+\s*platform\s*\n+[\s>*-]*\s*(windows|linux\s*\/\s*wayland|both|cross|all)\s*$/im);
-            if (platHeading) {
-              const v = platHeading[1].toLowerCase();
-              labels.push(v === 'windows' ? 'platform:windows' : (v.startsWith('linux') ? 'platform:linux' : 'platform:cross'));
-            }
-
-            // Keyword fallback for issues not created from a template.
-            if (!labels.some(l => TYPES.includes(l))) {
-              const rules = [
-                ['bug', /\b(panic|crash|segfault|regression|broken|error)\b/],
-                ['enhancement', /\b(feature|support for|would be nice|please implement|coverage)\b/],
-                ['question', /\b(how (do|can) i|how to|question)\b/],
-                ['documentation', /\b(documentation|docs|readme|changelog|typo)\b/],
-                ['refactor', /\b(refactor|cleanup|unused|dead code)\b/],
-              ];
-              labels.push(...rules.filter(([, re]) => re.test(text)).map(([l]) => l));
-            }
-            if (!labels.some(l => l.startsWith('platform:'))) {
-              const windows = /\b(windows|dxgi|d3d11)\b/.test(text);
-              const linux = /\b(linux|wayland|wlroots|sway|hyprland|niri|river|wayfire|cosmic)\b/.test(text);
-              if (windows && !linux) labels.push('platform:windows');
-              else if (linux && !windows) labels.push('platform:linux');
-              else if (windows && linux) labels.push('platform:windows', 'platform:linux');
-              else labels.push('platform:cross');
-            }
-
-            if (labels.length) {
-              await github.rest.issues.addLabels({
-                owner, repo,
-                issue_number: context.payload.issue.number,
-                labels,
-              });
-            }
-
-      - name: Label pull request
-        if: github.event_name == 'pull_request_target'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { owner, repo } = context.repo;
-            const pr = context.payload.pull_request;
-            const title = pr.title.toLowerCase();
-            const prefix = {
-              'fix': 'bug',
-              'feat': 'enhancement',
-              'docs': 'documentation',
-              'perf': 'performance',
-              'refactor': 'refactor',
-              'ci': 'dependencies',
-              'build': 'dependencies',
-            };
-            const labels = [];
-            const m = title.match(/^(\w+)(?:\(([^)]+)\))?!?:/);
-            if (m) {
-              if (prefix[m[1]]) {
-                labels.push(prefix[m[1]]);
-              } else if (m[1] === 'chore' && m[2] && m[2].includes('deps')) {
-                labels.push('dependencies');
-              }
-            }
-            const prText = title + '\n' + ((pr.body || '')).toLowerCase();
-            const windows = /\b(windows|dxgi|d3d11)\b/.test(prText);
-            const linux = /\b(linux|wayland|wlroots|sway|hyprland|niri|river|wayfire|cosmic)\b/.test(prText);
-            if (windows && !linux) labels.push('platform:windows');
-            else if (linux && !windows) labels.push('platform:linux');
-            else if (windows && linux) labels.push('platform:windows', 'platform:linux');
-            else labels.push('platform:cross');
-            labels.push(pr.draft ? 'status:in-progress' : 'status:needs-review');
-            await github.rest.issues.addLabels({
-              owner, repo,
-              issue_number: pr.number,
-              labels,
-            });
+            const { run } = require('./.github/scripts/labeler.cjs');
+            await run({ github, context, core,
+              dryRun: context.eventName === 'workflow_dispatch' && context.payload.inputs?.dry_run !== 'false' });

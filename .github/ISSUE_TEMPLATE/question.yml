@@ -1,0 +1,65 @@
+name: Question
+description: Ask about usage or behavior
+body:
+  - type: dropdown
+    id: issue-kind
+    attributes:
+      label: Issue kind
+      options:
+        - Question
+      default: 0
+    validations:
+      required: true
+  - type: dropdown
+    id: platforms
+    attributes:
+      label: Affected platforms
+      description: Select affected systems, or one exclusive Unknown / Not platform-specific answer.
+      multiple: true
+      options:
+        - Windows
+        - Linux
+        - Unknown
+        - Not platform-specific
+    validations:
+      required: true
+  - type: dropdown
+    id: backends
+    attributes:
+      label: Linux backends
+      description: Select the Linux backends involved. X11 support is planned. For Windows-only or general API topics, select Not applicable. Other / Unknown / Not applicable must be selected alone.
+      multiple: true
+      options:
+        - Wayland
+        - X11
+        - Other
+        - Unknown
+        - Not applicable
+    validations:
+      required: true
+  - type: input
+    id: other-backend
+    attributes:
+      label: Other backend
+      description: If you selected Other, name it here.
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What would you like to understand?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Include enough context to understand the question. Use Not platform-specific for general API questions.
+    validations:
+      required: true
+  - type: textarea
+    id: attempts
+    attributes:
+      label: What you tried
+      description: What have you already checked or tried?
+    validations:
+      required: false

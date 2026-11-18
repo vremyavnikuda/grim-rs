@@ -1,0 +1,19 @@
+{
+  ".github/workflows/ci.yml": {
+    "fmt": "Format",
+    "audit": "Security audit",
+    "clippy": "Clippy",
+    "checks-linux": "Checks (Linux)",
+    "checks-windows": "Checks (Windows)",
+    "benches-linux": "Benches (Linux)",
+    "benches-windows": "Benches (Windows)"
+  },
+  ".github/workflows/tests.yml": {
+    "test-linux": "Tests (Linux)",
+    "test-windows": "Tests (Windows)"
+  },
+  ".github/workflows/pr-quality.yml": {
+    "no-merge-commits": "No merge commits",
+    "conventional-commits": "Conventional commits"
+  }
+}
