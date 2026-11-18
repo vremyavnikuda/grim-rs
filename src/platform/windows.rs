@@ -211,12 +211,11 @@ impl WindowsCapture {
                 Error::DirectXError(format!("DuplicateOutput: {e}"))
             }
         })?;
-        // Skip the initial blank frame that DXGI returns after DuplicateOutput.
-        // The first AcquireNextFrame may return WAIT_TIMEOUT, so retry until we
-        // get a real frame to discard. The pointer shape is reported with this
-        // initial frame (and on later frames only when it changes), so cache
-        // it here - relying on per-frame PointerShapeBufferSize would leave
-        // most captures without a cursor.
+        // Discard the first successfully acquired frame to work around blank startup
+        // surfaces. Acquisition is bounded by MAX_ACQUIRE_ATTEMPTS; this does not
+        // verify that the frame contains a desktop update.
+        // Preserve cursor metadata from the discarded frame because later frames
+        // may omit unchanged cursor shape and position information.
         let mut cursor_shape = None;
         let mut pointer_position = None;
         for _ in 0..MAX_ACQUIRE_ATTEMPTS {
