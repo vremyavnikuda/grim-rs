@@ -31,7 +31,12 @@ jobs:
               ['question', /\b(how (do|can) i|how to|question)\b/],
               ['documentation', /\b(documentation|docs|readme|changelog|typo)\b/],
             ];
-            const labels = rules.filter(([, re]) => re.test(text)).map(([l]) => l);
+            const platforms = [
+              ['platform:windows', /\b(windows|dxgi|d3d11)\b/],
+              ['platform:linux', /\b(linux|wayland|wlroots|sway|hyprland|niri|river|wayfire|cosmic)\b/],
+            ];
+            const labels = rules.filter(([, re]) => re.test(text)).map(([l]) => l)
+              .concat(platforms.filter(([, re]) => re.test(text)).map(([l]) => l));
             if (labels.length) {
               await github.rest.issues.addLabels({
                 owner, repo,
@@ -65,6 +70,13 @@ jobs:
               } else if (m[1] === 'chore' && m[2] && m[2].includes('deps')) {
                 labels.push('dependencies');
               }
+            }
+            const prText = title + '\n' + ((pr.body || '')).toLowerCase();
+            if (/\b(windows|dxgi|d3d11)\b/.test(prText)) {
+              labels.push('platform:windows');
+            }
+            if (/\b(linux|wayland|wlroots|sway|hyprland|niri|river|wayfire|cosmic)\b/.test(prText)) {
+              labels.push('platform:linux');
             }
             labels.push(pr.draft ? 'status:in-progress' : 'status:needs-review');
             await github.rest.issues.addLabels({
