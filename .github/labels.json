@@ -156,7 +156,7 @@
   },
   {
     "name": "status:need-review",
-    "color": "0E8A16",
+    "color": "8957E5",
     "description": "Issue needs triage, or PR awaits review"
   },
   {
