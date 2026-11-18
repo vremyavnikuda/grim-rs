@@ -82,6 +82,10 @@ struct DupEntry {
     // DXGI only sends PointerPosition on frames where the pointer moved
     // (LastMouseUpdateTime != 0); remember the last known position.
     pointer_position: Option<DXGI_OUTDUPL_POINTER_POSITION>,
+    // The desktop surface accumulates updates between frames, so the last
+    // copied frame stays valid until DXGI reports a new one; serve it on
+    // WAIT_TIMEOUT instead of failing on a static screen.
+    last_frame: Option<(Vec<u8>, u32, u32)>,
 }
 
 pub struct WindowsCapture {
@@ -249,6 +253,7 @@ impl WindowsCapture {
                 dup,
                 cursor_shape,
                 pointer_position,
+                last_frame: None,
             },
         );
         Ok(())
@@ -277,7 +282,7 @@ impl WindowsCapture {
                     std::ptr::addr_of_mut!(desktop_resource),
                 )
             };
-            match result {
+            let (mut pixels, width, height) = match result {
                 Ok(()) => {
                     let resource = match desktop_resource {
                         Some(r) => r,
@@ -295,6 +300,7 @@ impl WindowsCapture {
                     };
                     let adapter = &self.adapters[info.adapter_idx];
                     let texture: ID3D11Texture2D = resource.cast().map_err(|e| {
+                        let _ = unsafe { dup.ReleaseFrame() };
                         Error::DirectXError(format!("Cast IDXGIResource -> ID3D11Texture2D: {e}"))
                     })?;
                     let mut tex_desc = D3D11_TEXTURE2D_DESC::default();
@@ -318,19 +324,45 @@ impl WindowsCapture {
                     };
                     let staging: ID3D11Texture2D = {
                         let mut tex: Option<ID3D11Texture2D> = None;
-                        unsafe {
+                        let r = unsafe {
                             adapter
                                 .device
                                 .CreateTexture2D(&staging_desc, None, Some(&mut tex))
+                        };
+                        if let Err(e) = r {
+                            let _ = unsafe { dup.ReleaseFrame() };
+                            return Err(Error::BufferCreation(format!(
+                                "CreateTexture2D (staging): {e}"
+                            )));
                         }
-                        .map_err(|e| {
-                            Error::BufferCreation(format!("CreateTexture2D (staging): {e}"))
-                        })?;
-                        tex.ok_or_else(|| {
-                            Error::BufferCreation("CreateTexture2D returned null".to_string())
-                        })?
+                        match tex {
+                            Some(t) => t,
+                            None => {
+                                let _ = unsafe { dup.ReleaseFrame() };
+                                return Err(Error::BufferCreation(
+                                    "CreateTexture2D returned null".to_string(),
+                                ));
+                            }
+                        }
                     };
                     unsafe { adapter.context.CopyResource(&staging, &texture) };
+                    // The shape buffer is only filled when the shape changed;
+                    // refresh the cached shape while the frame is still held.
+                    if overlay_cursor && frame_info.PointerShapeBufferSize > 0 {
+                        if let Some(shape) =
+                            fetch_cursor_shape(dup, frame_info.PointerShapeBufferSize)
+                        {
+                            entry.cursor_shape = Some(shape);
+                        }
+                    }
+                    if frame_info.LastMouseUpdateTime != 0 || entry.pointer_position.is_none() {
+                        entry.pointer_position = Some(frame_info.PointerPosition);
+                    }
+                    // Release before Map: every error path below must not
+                    // leave the acquired frame hanging, or the duplication
+                    // session stops producing frames.
+                    unsafe { dup.ReleaseFrame() }
+                        .map_err(|e| Error::DirectXError(format!("ReleaseFrame: {e}")))?;
                     let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
                     unsafe {
                         adapter.context.Map(
@@ -356,73 +388,22 @@ impl WindowsCapture {
                         pixels.extend_from_slice(&data[src_start..src_start + pixel_bytes]);
                     }
                     unsafe { adapter.context.Unmap(&staging, 0) };
-                    // The shape buffer is only filled when the shape changed;
-                    // refresh the cached shape before releasing the frame.
-                    if overlay_cursor && frame_info.PointerShapeBufferSize > 0 {
-                        if let Some(shape) =
-                            fetch_cursor_shape(dup, frame_info.PointerShapeBufferSize)
-                        {
-                            entry.cursor_shape = Some(shape);
-                        }
-                    }
-                    if frame_info.LastMouseUpdateTime != 0 || entry.pointer_position.is_none() {
-                        entry.pointer_position = Some(frame_info.PointerPosition);
-                    }
-                    unsafe { dup.ReleaseFrame() }
-                        .map_err(|e| Error::DirectXError(format!("ReleaseFrame: {e}")))?;
                     pixel_format::convert_to_rgba(&mut pixels, PixelFormat::Argb8888);
-                    // The shape comes from the cache because DXGI only resends
-                    // it when it changes; the position is the last one DXGI
-                    // reported (frames without mouse movement carry no update).
-                    if overlay_cursor {
-                        let pointer = entry.pointer_position;
-                        log::debug!(
-                            "blending cursor: shape_cached={} pointer={:?}",
-                            entry.cursor_shape.is_some(),
-                            pointer.map(|p| (p.Position, p.Visible.as_bool()))
-                        );
-                        if let Some(pointer) = pointer.filter(|p| p.Visible.as_bool()) {
-                            if let Some(CachedCursorShape { info, buf }) = &entry.cursor_shape {
-                                let screen_x = pointer.Position.x - info.HotSpot.x;
-                                let screen_y = pointer.Position.y - info.HotSpot.y;
-                                if info.Type == DXGI_OUTDUPL_POINTER_SHAPE_TYPE_MONOCHROME.0 as u32
-                                {
-                                    // A monochromatic shape packs two 1bpp masks;
-                                    // Height counts both, so the visible height is
-                                    // half of it.
-                                    blend_mono_cursor_rgba(
-                                        &mut pixels,
-                                        (width, height),
-                                        buf,
-                                        (info.Width, info.Height / 2),
-                                        info.Pitch as usize,
-                                        (screen_x, screen_y),
-                                    );
-                                } else {
-                                    // COLOR shapes are 32-bit BGRA. MASKED_COLOR
-                                    // stores the color bitmap first with the same
-                                    // pitch, so blending it as color is safe (the
-                                    // AND mask tail is simply never read).
-                                    blend_cursor_rgba(
-                                        &mut pixels,
-                                        (width, height),
-                                        buf,
-                                        (info.Width, info.Height),
-                                        info.Pitch as usize,
-                                        (screen_x, screen_y),
-                                    );
-                                }
-                            }
-                        }
-                    }
-                    return Ok((pixels, width, height));
+                    (pixels, width, height)
                 }
                 Err(e) if e.code() == DXGI_ERROR_WAIT_TIMEOUT => {
-                    attempts += 1;
-                    if attempts >= MAX_ACQUIRE_ATTEMPTS {
-                        return Err(Error::FrameCapture(
-                            "Timeout waiting for frame update".to_string(),
-                        ));
+                    // Static desktop: the last copied frame is still current.
+                    match &entry.last_frame {
+                        Some(cached) => cached.clone(),
+                        None => {
+                            attempts += 1;
+                            if attempts >= MAX_ACQUIRE_ATTEMPTS {
+                                return Err(Error::FrameCapture(
+                                    "Timeout waiting for frame update".to_string(),
+                                ));
+                            }
+                            continue;
+                        }
                     }
                 }
                 Err(e) if e.code() == DXGI_ERROR_ACCESS_LOST => {
@@ -439,7 +420,52 @@ impl WindowsCapture {
                 Err(e) => {
                     return Err(Error::DirectXError(format!("AcquireNextFrame: {e}")));
                 }
+            };
+            entry.last_frame = Some((pixels.clone(), width, height));
+            // The shape comes from the cache because DXGI only resends
+            // it when it changes; the position is the last one DXGI
+            // reported (frames without mouse movement carry no update).
+            if overlay_cursor {
+                let pointer = entry.pointer_position;
+                log::debug!(
+                    "blending cursor: shape_cached={} pointer={:?}",
+                    entry.cursor_shape.is_some(),
+                    pointer.map(|p| (p.Position, p.Visible.as_bool()))
+                );
+                if let Some(pointer) = pointer.filter(|p| p.Visible.as_bool()) {
+                    if let Some(CachedCursorShape { info, buf }) = &entry.cursor_shape {
+                        let screen_x = pointer.Position.x - info.HotSpot.x;
+                        let screen_y = pointer.Position.y - info.HotSpot.y;
+                        if info.Type == DXGI_OUTDUPL_POINTER_SHAPE_TYPE_MONOCHROME.0 as u32 {
+                            // A monochromatic shape packs two 1bpp masks;
+                            // Height counts both, so the visible height is
+                            // half of it.
+                            blend_mono_cursor_rgba(
+                                &mut pixels,
+                                (width, height),
+                                buf,
+                                (info.Width, info.Height / 2),
+                                info.Pitch as usize,
+                                (screen_x, screen_y),
+                            );
+                        } else {
+                            // COLOR shapes are 32-bit BGRA. MASKED_COLOR
+                            // stores the color bitmap first with the same
+                            // pitch, so blending it as color is safe (the
+                            // AND mask tail is simply never read).
+                            blend_cursor_rgba(
+                                &mut pixels,
+                                (width, height),
+                                buf,
+                                (info.Width, info.Height),
+                                info.Pitch as usize,
+                                (screen_x, screen_y),
+                            );
+                        }
+                    }
+                }
             }
+            return Ok((pixels, width, height));
         }
     }
 
