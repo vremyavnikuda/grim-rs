@@ -47,6 +47,21 @@ jobs:
               if (kv.platform === 'windows') labels.push('platform:windows');
               else if (kv.platform === 'linux') labels.push('platform:linux');
               else if (kv.platform === 'both' || kv.platform === 'cross' || kv.platform === 'all') labels.push('platform:cross');
+
+              // Sync: the marker is the owner's explicit intent, so managed
+              // labels (type + platform) must match it exactly — remove the
+              // ones that no longer match instead of accumulating duplicates.
+              const MANAGED = [...KINDS, 'platform:windows', 'platform:linux', 'platform:cross'];
+              const current = await github.rest.issues.listLabelsOnIssue({
+                owner, repo, issue_number: context.payload.issue.number,
+              });
+              for (const name of current.data.map(l => l.name)) {
+                if (MANAGED.includes(name) && !labels.includes(name)) {
+                  await github.rest.issues.removeLabel({
+                    owner, repo, issue_number: context.payload.issue.number, name,
+                  }).catch(() => {});
+                }
+              }
             }
 
             // Note: priority is never assigned automatically — it is set by
