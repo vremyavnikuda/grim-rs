@@ -28,6 +28,23 @@ jobs:
 
             const labels = [];
 
+            // Authoritative machine metadata: a single invisible HTML comment
+            // line, e.g. <!-- grim: kind=bug platform=windows priority=high -->
+            const grim = body.match(/<!--\s*grim\s*:\s*([^>]*)-->/i);
+            if (grim) {
+              const kv = {};
+              for (const pair of grim[1].trim().split(/\s+/)) {
+                const i = pair.indexOf('=');
+                if (i > 0) kv[pair.slice(0, i).toLowerCase()] = pair.slice(i + 1).toLowerCase();
+              }
+              const KINDS = ['bug', 'enhancement', 'documentation', 'refactor', 'question', 'performance'];
+              if (KINDS.includes(kv.kind)) labels.push(kv.kind);
+              if (kv.platform === 'windows') labels.push('platform:windows');
+              else if (kv.platform === 'linux') labels.push('platform:linux');
+              else if (kv.platform === 'both' || kv.platform === 'cross' || kv.platform === 'all') labels.push('platform:cross');
+              if (/^(critical|high|medium|low)$/.test(kv.priority || '')) labels.push('priority:' + kv.priority);
+            }
+
             // Deterministic fields from the issue template (or an explicit
             // metadata block): "Kind: <type>" and "Platform: <value>".
             const KINDS = ['bug', 'enhancement', 'documentation', 'refactor', 'question', 'performance'];

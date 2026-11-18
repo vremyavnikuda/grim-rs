@@ -3,7 +3,7 @@ description: Something is not working as expected
 body:
   - type: markdown
     attributes:
-      value: "Kind: bug"
+      value: "<!-- grim: kind=bug -->"
   - type: dropdown
     id: platform
     attributes:

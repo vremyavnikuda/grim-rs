@@ -3,7 +3,7 @@ description: Suggest an improvement or new capability
 body:
   - type: markdown
     attributes:
-      value: "Kind: enhancement"
+      value: "<!-- grim: kind=enhancement -->"
   - type: dropdown
     id: platform
     attributes:
