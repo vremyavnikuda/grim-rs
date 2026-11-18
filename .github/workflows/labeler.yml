@@ -27,9 +27,10 @@ jobs:
             const text = title + '\n' + body;
             const rules = [
               ['bug', /\b(panic|crash|segfault|regression|broken|error)\b/],
-              ['enhancement', /\b(feature|support for|would be nice|please implement)\b/],
+              ['enhancement', /\b(feature|support for|would be nice|please implement|coverage)\b/],
               ['question', /\b(how (do|can) i|how to|question)\b/],
               ['documentation', /\b(documentation|docs|readme|changelog|typo)\b/],
+              ['refactor', /\b(refactor|cleanup|unused|dead code)\b/],
             ];
             const platforms = [
               ['platform:windows', /\b(windows|dxgi|d3d11)\b/],
