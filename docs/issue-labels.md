@@ -96,7 +96,7 @@ absence of merge conflicts, and no blockers.
 
 All jobs in these workflows are mandatory, defined in `.github/label-policy.json`:
 
-- `CI`: Format, Security audit, Clippy, Checks and Benches on Linux/Windows.
+- `CI`: Format, Security audit, Clippy, MSRV (1.82), Checks and Benches on Linux/Windows.
 - `Tests`: Linux and Windows.
 - `PR Quality`: No merge commits and Conventional commits.
 
