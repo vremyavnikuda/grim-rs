@@ -16,7 +16,7 @@ For full rustdoc details, see [docs.rs/grim-rs](https://docs.rs/grim-rs).
 
 ### Getting Display Information
 
-- `get_outputs()` - Get list of available outputs with their properties (name, geometry, scale)
+- `get_outputs()` - Get list of available outputs with their properties (name, geometry, scale); returns `Error::NoOutputs` when no outputs are available (same contract on Linux and Windows)
 
 ### Capture Methods
 
