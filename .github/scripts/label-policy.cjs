@@ -4,6 +4,7 @@ const STAGES = ['status:in-progress', 'status:need-review', 'status:needs-rework
 const STATUSES = [...STAGES, 'status:blocked', 'status:needs-review'];
 const AUTO_BLOCKERS = ['blocker:ci', 'blocker:merge-conflict'];
 const PRIORITIES = ['priority:critical', 'priority:high', 'priority:medium', 'priority:low'];
+const RESOLUTIONS = ['resolution:completed', 'resolution:unconfirmed', 'duplicate', 'stale', 'wontfix'];
 const KIND = new Map([['Bug report', 'bug'], ['Feature request', 'enhancement'], ['Question', 'question']]);
 
 function parseForm(body) {
@@ -81,8 +82,14 @@ function isBlocked(labels) {
 }
 
 function issueLabels(snapshot) {
-  const labels = blockers(snapshot);
-  if (snapshot.closed) return replaceGroup(labels, STATUSES, []);
+  let labels = blockers(snapshot).filter(label => !(snapshot.resetResolutions || []).includes(label));
+  if (RESOLUTIONS.includes(snapshot.resolutionChoice) && labels.includes(snapshot.resolutionChoice)) {
+    labels = replaceGroup(labels, RESOLUTIONS, [snapshot.resolutionChoice]);
+  }
+  if (snapshot.closed) {
+    if (snapshot.completedByPR && !labels.some(label => RESOLUTIONS.includes(label))) labels.push('resolution:completed');
+    return replaceGroup(labels, STATUSES, []);
+  }
   if (isBlocked(labels)) return replaceGroup(labels, STATUSES, ['status:blocked']);
   if (snapshot.development === null || snapshot.conflict === null || snapshot.ci === null) return labels;
   if ((snapshot.manualReview === true || snapshot.manualReview === null) && labels.includes('status:need-review')) {
@@ -95,12 +102,15 @@ function prLabels(snapshot, event = {}) {
   let labels = blockers(snapshot);
   if (snapshot.closed) return replaceGroup(labels, STATUSES, []);
   const requested = event.action === 'labeled' && STAGES.includes(event.label) && labels.includes(event.label) ? event.label : null;
-  let stage = requested || ['status:needs-rework', 'status:needs-testing', 'status:ready-to-merge', 'status:need-review']
-    .find(label => labels.includes(label)) || 'status:need-review';
+  let stage = requested || ['status:needs-rework', 'status:needs-testing', 'status:ready-to-merge', 'status:need-review', 'status:in-progress']
+    .find(label => labels.includes(label)) || 'status:in-progress';
   if (snapshot.draft) stage = 'status:in-progress';
-  else if (snapshot.resetReview && !['status:needs-rework', 'status:needs-testing'].includes(stage)) stage = 'status:need-review';
+  else if (snapshot.resetReview && !['status:needs-rework', 'status:needs-testing'].includes(stage)) stage = snapshot.readyForReview ? 'status:need-review' : 'status:in-progress';
   if (stage === 'status:ready-to-merge' && (isBlocked(labels) || !snapshot.ci?.success || snapshot.conflict !== false)) stage = 'status:need-review';
-  labels = replaceGroup(labels, STATUSES, [stage, ...(isBlocked(labels) ? ['status:blocked'] : [])]);
+  labels = replaceGroup(labels, STATUSES, [
+    ...(stage === 'status:in-progress' && isBlocked(labels) ? [] : [stage]),
+    ...(isBlocked(labels) ? ['status:blocked'] : []),
+  ]);
   return labels;
 }
 
@@ -116,4 +126,4 @@ function labelDiff(current, desired) {
 }
 
 module.exports = { parseForm, classify, ciState, issueLabels, prLabels, normalizePriority, labelDiff,
-  TYPES, CLASSIFICATION, STATUSES, STAGES, AUTO_BLOCKERS, PRIORITIES };
+  TYPES, CLASSIFICATION, STATUSES, STAGES, AUTO_BLOCKERS, PRIORITIES, RESOLUTIONS };

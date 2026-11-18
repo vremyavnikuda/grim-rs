@@ -1,5 +1,6 @@
 const policy = require('./label-policy.cjs');
 const required = require('../label-policy.json');
+const stale = require('./stale-issues.cjs');
 const RUN_NAME = "${{ github.event_name == 'pull_request' && format('PR #{0} head={1} base={2}', github.event.pull_request.number, github.event.pull_request.head.sha, github.event.pull_request.base.sha) || github.workflow }}";
 
 function createClient({github, context, core, dryRun = false}) {
@@ -195,16 +196,58 @@ function createClient({github, context, core, dryRun = false}) {
         manualReview = latest.actor.type === 'User' && !latest.actor.login?.endsWith('[bot]');
       } catch (error) { manualReview = null; warn(`#${number}: review label preserved: ${error.message}`); }
     }
+    let resetResolutions = [], resolutionChoice, completedByPR = false;
+    if (labels.some(label => policy.RESOLUTIONS.includes(label))) {
+      try {
+        const timeline = await github.paginate(github.rest.issues.listEventsForTimeline,{...home,issue_number:number,per_page:100});
+        if (timeline.some(entry => (entry.event === 'reopened' || entry.event === 'labeled' && policy.RESOLUTIONS.includes(entry.label?.name)) && !Number.isSafeInteger(entry.id))) throw Error('Incomplete resolution timeline');
+        const reopen = timeline.filter(entry => entry.event === 'reopened').sort((a,b) => b.id-a.id)[0];
+        const choices = timeline.filter(entry => entry.event === 'labeled' && policy.RESOLUTIONS.includes(entry.label?.name) && labels.includes(entry.label.name))
+          .sort((a,b) => b.id-a.id);
+        if (reopen) resetResolutions = policy.RESOLUTIONS.filter(name =>
+          labels.includes(name) && !choices.some(entry => entry.label.name === name && entry.id > reopen.id));
+        resolutionChoice = choices.find(entry => !resetResolutions.includes(entry.label.name))?.label.name;
+      } catch (error) { warn(`#${number}: closure labels preserved: ${error.message}`); }
+    }
+    if (issue.state === 'closed' && issue.state_reason === 'completed' &&
+        !labels.some(label => policy.RESOLUTIONS.includes(label) && !resetResolutions.includes(label))) {
+      try { completedByPR = await closedByMergedPR(issue); }
+      catch (error) { warn(`#${number}: completion unverified: ${error.message}`); }
+    }
     const fresh = (await github.rest.issues.get({...home,issue_number:number})).data;
-    if (fresh.body !== issue.body || fresh.state !== issue.state || fresh.updated_at !== issue.updated_at) {
+    if (fresh.body !== issue.body || fresh.state !== issue.state || fresh.closed_at !== issue.closed_at || fresh.state_reason !== issue.state_reason || fresh.updated_at !== issue.updated_at) {
       warn(`#${number}: issue changed while reading; defer to its next event`); return;
     }
     const changes = policy.labelDiff(current, await labelsFor(number));
     if (changes.add.length || changes.remove.length) {
       warn(`#${number}: labels changed while reading; defer to the next reconciliation`); return;
     }
-    labels = policy.issueLabels({labels, closed:issue.state !== 'open', development, conflict, ci, manualReview});
+    labels = policy.issueLabels({labels, closed:issue.state !== 'open', development, conflict, ci,
+      resetResolutions, resolutionChoice, completedByPR, manualReview});
     await apply(number,current,labels);
+  }
+
+  async function closedByMergedPR(issue) {
+    const result = await github.graphql(`query($owner:String!,$repo:String!,$number:Int!) {
+      repository(owner:$owner,name:$repo) { issue(number:$number) {
+        state closedAt timelineItems(last:1,itemTypes:[CLOSED_EVENT]) {
+          nodes { ... on ClosedEvent {
+            __typename createdAt stateReason closer { __typename ... on PullRequest { number merged mergedAt } }
+          } }
+        }
+      } }
+    }`, {...home, number:issue.number});
+    const closed = result.repository?.issue;
+    if (closed?.state !== 'CLOSED' || closed.closedAt !== issue.closed_at || !Array.isArray(closed.timelineItems?.nodes)) throw Error('Closure revision changed or incomplete');
+    const event = closed.timelineItems.nodes[0];
+    if (!event) return false;
+    if (event.__typename !== 'ClosedEvent' || event.createdAt !== issue.closed_at || !Object.hasOwn(event, 'closer')) throw Error('Incomplete closure event');
+    if (event.stateReason !== 'COMPLETED' || event.closer === null || event.closer.__typename !== 'PullRequest') return false;
+    if (typeof event.closer.merged !== 'boolean') throw Error('Unknown closing PR state');
+    if (!event.closer.merged) return false;
+    const mergedAt = Date.parse(event.closer.mergedAt), closedAt = Date.parse(issue.closed_at);
+    if (!Number.isFinite(mergedAt) || !Number.isFinite(closedAt)) throw Error('Incomplete merge timing');
+    return mergedAt <= closedAt;
   }
 
   async function syncPR(number) {
@@ -217,7 +260,7 @@ function createClient({github, context, core, dryRun = false}) {
     let labels = current;
     if (event.action === 'labeled' && current.includes(event.label)) labels = policy.normalizePriority(labels,event.label);
     const resetReview = ['synchronize','reopened','ready_for_review'].includes(event.action) || !!context.payload.changes?.base;
-    await apply(number,current,policy.prLabels({...snapshot,labels,resetReview},event));
+    await apply(number,current,policy.prLabels({...snapshot,labels,resetReview,readyForReview:event.action === 'ready_for_review'},event));
   }
 
   return {readDevelopment, readCI, readPR, syncIssue, syncPR};
@@ -226,10 +269,25 @@ function createClient({github, context, core, dryRun = false}) {
 async function run(options) {
   const {github,context} = options;
   const client = createClient(options);
+  const aging = ['schedule', 'workflow_dispatch'].includes(context.eventName);
+  const syncStale = async number => {
+    try {
+      const closed = await stale.syncIssue({...options, repo:context.repo, issue_number:number,
+        readDevelopment:client.readDevelopment, allowAging:aging});
+      if (closed) await client.syncIssue(number);
+    } catch (error) { options.core.warning(`#${number}: stale reconciliation deferred: ${error.message}`); }
+  };
+  if (context.eventName === 'issue_comment') {
+    if (context.payload.issue.pull_request) return;
+    await client.syncIssue(context.payload.issue.number);
+    await syncStale(context.payload.issue.number);
+    return;
+  }
   if (context.eventName === 'issues') {
     const classify = ['opened','edited'].includes(context.payload.action) ||
       context.payload.action === 'unlabeled' && context.payload.label?.name === 'triage:confirmed';
     await client.syncIssue(context.payload.issue.number,classify);
+    await syncStale(context.payload.issue.number);
     return;
   }
   if (context.eventName === 'pull_request_target') await client.syncPR(context.payload.pull_request.number);
@@ -237,7 +295,14 @@ async function run(options) {
   if (context.eventName !== 'pull_request_target') {
     for (const item of items.filter(item => item.pull_request)) await client.syncPR(item.number);
   }
-  for (const item of items.filter(item => !item.pull_request)) await client.syncIssue(item.number);
+  for (const item of items.filter(item => !item.pull_request)) {
+    await client.syncIssue(item.number);
+    if (aging) await syncStale(item.number);
+  }
+  if (aging) {
+    const closed = await github.paginate(github.rest.issues.listForRepo,{...context.repo,state:'closed',per_page:100});
+    for (const item of closed.filter(item => !item.pull_request && item.state === 'closed')) await client.syncIssue(item.number);
+  }
 }
 
 module.exports = {run,createClient};

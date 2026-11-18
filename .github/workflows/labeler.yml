@@ -3,6 +3,8 @@ name: Labeler
 on:
   issues:
     types: [opened, edited, reopened, closed, labeled, unlabeled]
+  issue_comment:
+    types: [created, edited]
   pull_request_target:
     types: [opened, edited, reopened, closed, synchronize, ready_for_review, converted_to_draft, labeled, unlabeled]
   workflow_run:

@@ -45,6 +45,8 @@ function createGithub(invoke=(args,options)=>execFileSync('gh',args,options)) {
     rest:{
       issues:{
         get:route('GET',`${base}/issues/{issue_number}`),
+        update:route('PATCH',`${base}/issues/{issue_number}`),
+        createComment:route('POST',`${base}/issues/{issue_number}/comments`),
         listForRepo:route('GET',`${base}/issues`),
         listLabelsForRepo:route('GET',`${base}/labels`),
         listLabelsOnIssue:route('GET',`${base}/issues/{issue_number}/labels`),
