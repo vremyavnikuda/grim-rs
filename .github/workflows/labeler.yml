@@ -35,8 +35,9 @@ jobs:
               ['platform:windows', /\b(windows|dxgi|d3d11)\b/],
               ['platform:linux', /\b(linux|wayland|wlroots|sway|hyprland|niri|river|wayfire|cosmic)\b/],
             ];
+            const matched = platforms.filter(([, re]) => re.test(text)).map(([l]) => l);
             const labels = rules.filter(([, re]) => re.test(text)).map(([l]) => l)
-              .concat(platforms.filter(([, re]) => re.test(text)).map(([l]) => l));
+              .concat(matched.length ? matched : ['platform:cross']);
             if (labels.length) {
               await github.rest.issues.addLabels({
                 owner, repo,
@@ -72,12 +73,14 @@ jobs:
               }
             }
             const prText = title + '\n' + ((pr.body || '')).toLowerCase();
+            const prPlatforms = [];
             if (/\b(windows|dxgi|d3d11)\b/.test(prText)) {
-              labels.push('platform:windows');
+              prPlatforms.push('platform:windows');
             }
             if (/\b(linux|wayland|wlroots|sway|hyprland|niri|river|wayfire|cosmic)\b/.test(prText)) {
-              labels.push('platform:linux');
+              prPlatforms.push('platform:linux');
             }
+            labels.push(...(prPlatforms.length ? prPlatforms : ['platform:cross']));
             labels.push(pr.draft ? 'status:in-progress' : 'status:needs-review');
             await github.rest.issues.addLabels({
               owner, repo,
