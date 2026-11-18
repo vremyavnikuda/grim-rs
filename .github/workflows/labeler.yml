@@ -42,6 +42,9 @@ jobs:
               labels.push(v === 'windows' ? 'platform:windows' : (v.startsWith('linux') ? 'platform:linux' : 'platform:cross'));
             }
 
+            const prio = body.match(/^\s*[-*>]?\s*priority\s*:\s*(critical|high|medium|low)\s*$/im);
+            if (prio) labels.push('priority:' + prio[1].toLowerCase());
+
             // Keyword fallback for issues not created from a template.
             if (!labels.some(l => KINDS.includes(l))) {
               const rules = [
