@@ -56,9 +56,12 @@ jobs:
         with:
           script: |
             const { owner, repo } = context.repo;
-            const title = context.payload.issue.title.toLowerCase();
             const body = context.payload.issue.body || '';
-            const text = title + '\n' + body.toLowerCase();
+            // Keyword scanning uses the body only. The title is untrusted
+            // signal for free-form issues (anyone can write "error" there);
+            // form-structured issues get their type from the template
+            // sections and never reach the keyword rules.
+            const text = body.toLowerCase();
 
             const labels = [];
             const TYPES = ['bug', 'enhancement', 'documentation', 'refactor', 'question', 'performance'];
