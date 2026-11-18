@@ -452,20 +452,7 @@ impl WindowsCapture {
     }
 
     pub fn get_outputs(&mut self) -> Result<Vec<Output>> {
-        Ok(self
-            .output_info
-            .iter()
-            .map(|info| Output {
-                name: info.name.clone(),
-                geometry: Region::new(info.x, info.y, info.width, info.height),
-                scale: 1,
-                description: if info.description.is_empty() {
-                    None
-                } else {
-                    Some(info.description.clone())
-                },
-            })
-            .collect())
+        build_outputs(&self.output_info)
     }
 
     pub fn capture_output_raw(
@@ -753,5 +740,54 @@ pub fn blend_mono_cursor_rgba(
                 (true, false) => {}
             }
         }
+    }
+}
+
+fn build_outputs(output_info: &[OutputInfo]) -> Result<Vec<Output>> {
+    if output_info.is_empty() {
+        return Err(Error::NoOutputs);
+    }
+    Ok(output_info
+        .iter()
+        .map(|info| Output {
+            name: info.name.clone(),
+            geometry: Region::new(info.x, info.y, info.width, info.height),
+            scale: 1,
+            description: if info.description.is_empty() {
+                None
+            } else {
+                Some(info.description.clone())
+            },
+        })
+        .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_outputs_empty_returns_no_outputs() {
+        assert!(matches!(build_outputs(&[]), Err(Error::NoOutputs)));
+    }
+
+    #[test]
+    fn build_outputs_maps_fields() {
+        let info = vec![OutputInfo {
+            name: "DISPLAY1".to_string(),
+            x: 0,
+            y: 0,
+            width: 3440,
+            height: 1440,
+            rotation: 1,
+            description: String::new(),
+            adapter_idx: 0,
+            output_idx: 0,
+        }];
+        let outputs = build_outputs(&info).expect("non-empty list");
+        assert_eq!(outputs.len(), 1);
+        assert_eq!(outputs[0].name, "DISPLAY1");
+        assert_eq!(outputs[0].scale, 1);
+        assert!(outputs[0].description.is_none());
     }
 }
