@@ -30,18 +30,18 @@ pub fn fourcc_to_format(fourcc: u32) -> Option<PixelFormat> {
 pub fn convert_to_rgba(data: &mut [u8], format: PixelFormat) {
     match format {
         PixelFormat::Xrgb8888 => {
-            for chunk in data.chunks_exact_mut(4) {
+            for chunk in data.as_chunks_mut::<4>().0 {
                 chunk.swap(0, 2);
                 chunk[3] = 255;
             }
         }
         PixelFormat::Argb8888 => {
-            for chunk in data.chunks_exact_mut(4) {
+            for chunk in data.as_chunks_mut::<4>().0 {
                 chunk.swap(0, 2);
             }
         }
         PixelFormat::Xbgr8888 => {
-            for chunk in data.chunks_exact_mut(4) {
+            for chunk in data.as_chunks_mut::<4>().0 {
                 chunk[3] = 255;
             }
         }
