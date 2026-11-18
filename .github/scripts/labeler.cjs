@@ -179,16 +179,31 @@ function createClient({github, context, core, dryRun = false}) {
           states.some(state => !state.ci) ? null : {blocked:false,success:states.every(state => state.ci.success)};
       } catch (error) { warn(`#${number}: cannot establish Development state: ${error.message}`); }
     }
-    const fresh = (await github.rest.issues.get({...home,issue_number:number})).data;
-    if (fresh.body !== issue.body || fresh.state !== issue.state) {
-      warn(`#${number}: issue changed while reading; defer to its next event`); return;
-    }
     const current = await labelsFor(number);
     let labels = classifyForm && issue.state === 'open' ? policy.classify(current, issue.body) : current;
     if (classifyForm && !policy.parseForm(issue.body) && !current.includes('triage:confirmed')) warn(`#${number}: missing or invalid form; classification preserved`);
     const event = await eventFor(number,current);
     if (event.action === 'labeled' && current.includes(event.label)) labels = policy.normalizePriority(labels,event.label);
-    labels = policy.issueLabels({labels, closed:issue.state !== 'open', development, conflict, ci});
+    let manualReview = false;
+    if (issue.state === 'open' && labels.includes('status:need-review')) {
+      try {
+        const timeline = await github.paginate(github.rest.issues.listEventsForTimeline,{...home,issue_number:number,per_page:100});
+        const events = timeline.filter(entry => ['labeled','unlabeled'].includes(entry.event) && entry.label?.name === 'status:need-review');
+        if (events.some(entry => !Number.isSafeInteger(entry.id))) throw Error('Incomplete review label history');
+        const latest = events.sort((a,b) => b.id-a.id)[0];
+        if (latest?.event !== 'labeled' || !['User','Bot'].includes(latest.actor?.type)) throw Error('Unknown review label author');
+        manualReview = latest.actor.type === 'User' && !latest.actor.login?.endsWith('[bot]');
+      } catch (error) { manualReview = null; warn(`#${number}: review label preserved: ${error.message}`); }
+    }
+    const fresh = (await github.rest.issues.get({...home,issue_number:number})).data;
+    if (fresh.body !== issue.body || fresh.state !== issue.state || fresh.updated_at !== issue.updated_at) {
+      warn(`#${number}: issue changed while reading; defer to its next event`); return;
+    }
+    const changes = policy.labelDiff(current, await labelsFor(number));
+    if (changes.add.length || changes.remove.length) {
+      warn(`#${number}: labels changed while reading; defer to the next reconciliation`); return;
+    }
+    labels = policy.issueLabels({labels, closed:issue.state !== 'open', development, conflict, ci, manualReview});
     await apply(number,current,labels);
   }
 

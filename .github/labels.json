@@ -157,7 +157,7 @@
   {
     "name": "status:need-review",
     "color": "8957E5",
-    "description": "Issue needs triage, or PR awaits review"
+    "description": "Maintainer requested issue result review, or PR awaits review"
   },
   {
     "name": "status:needs-rework",

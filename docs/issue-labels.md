@@ -49,13 +49,19 @@ review because the old workflow also used it when no platform was detected.
 
 ## Issue working status
 
-An open issue has one working status:
+An open issue has at most one working status:
 
 | Condition | Status |
 | --- | --- |
 | At least one blocker | `status:blocked` |
-| No blockers, active Development | `status:in-progress` |
-| No blockers, no active Development | `status:need-review` |
+| No blockers, active Development, no manual review request | `status:in-progress` |
+| No blockers, maintainer explicitly requested result review | `status:need-review` |
+| No blockers, no active Development or manual review request | No working status |
+
+`status:need-review` on an issue is a manual request to check a result, not an
+automatic triage state. Automation removes its old bot-assigned instances and
+preserves manual assignments. Unknown label history postpones removal.
+`triage:confirmed` confirms the report classification and does not start work.
 
 Active Development means an existing linked branch or an open linked PR.
 Historical connections, ordinary mentions, and closed/merged PRs alone do not

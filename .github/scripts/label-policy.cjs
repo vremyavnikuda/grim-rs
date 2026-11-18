@@ -85,7 +85,10 @@ function issueLabels(snapshot) {
   if (snapshot.closed) return replaceGroup(labels, STATUSES, []);
   if (isBlocked(labels)) return replaceGroup(labels, STATUSES, ['status:blocked']);
   if (snapshot.development === null || snapshot.conflict === null || snapshot.ci === null) return labels;
-  return replaceGroup(labels, STATUSES, [snapshot.development ? 'status:in-progress' : 'status:need-review']);
+  if ((snapshot.manualReview === true || snapshot.manualReview === null) && labels.includes('status:need-review')) {
+    return replaceGroup(labels, STATUSES, ['status:need-review']);
+  }
+  return replaceGroup(labels, STATUSES, snapshot.development ? ['status:in-progress'] : []);
 }
 
 function prLabels(snapshot, event = {}) {
