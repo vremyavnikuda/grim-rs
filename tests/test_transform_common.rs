@@ -94,3 +94,103 @@ fn apply_transform_rotate_270_matches_direct() {
     let (expected, _, _) = rotate_270(&src, 2, 2);
     assert_eq!(result, expected);
 }
+
+fn transforms() -> Vec<OutputTransform> {
+    #[allow(unused_mut)]
+    let mut transforms = vec![
+        OutputTransform::Normal,
+        OutputTransform::Rotate90,
+        OutputTransform::Rotate180,
+        OutputTransform::Rotate270,
+    ];
+    #[cfg(target_os = "linux")]
+    transforms.extend([
+        OutputTransform::Flipped,
+        OutputTransform::Flipped90,
+        OutputTransform::Flipped180,
+        OutputTransform::Flipped270,
+    ]);
+    transforms
+}
+
+#[test]
+fn invalid_rgba_returns_empty_without_panicking() {
+    for (data, width, height) in [
+        (&[0u8; 10][..], 100, 100),
+        (&[0u8; 3][..], 1, 1),
+        (&[][..], u32::MAX, u32::MAX),
+        (&[][..], 1 << 30, 1),
+        (&[][..], 134_217_729, 1),
+    ] {
+        for transform in transforms() {
+            assert_eq!(
+                apply_image_transform(data, width, height, transform),
+                (Vec::new(), 0, 0),
+                "{width}x{height}, {transform:?}"
+            );
+        }
+        for rotate in [rotate_90, rotate_180, rotate_270] {
+            assert_eq!(rotate(data, width, height), (Vec::new(), 0, 0));
+        }
+    }
+}
+
+#[test]
+fn non_square_transforms_preserve_pixel_orientation_and_trailing_data_policy() {
+    let mut src: Vec<u8> = (1..=6).flat_map(|id| [id, 10, 20, 255]).collect();
+    src.extend([99, 98, 97]);
+    let mut cases = vec![
+        (OutputTransform::Rotate90, 2, 3, [4, 1, 5, 2, 6, 3]),
+        (OutputTransform::Rotate180, 3, 2, [6, 5, 4, 3, 2, 1]),
+        (OutputTransform::Rotate270, 2, 3, [3, 6, 2, 5, 1, 4]),
+    ];
+    #[cfg(target_os = "linux")]
+    cases.extend([
+        (OutputTransform::Flipped, 3, 2, [3, 2, 1, 6, 5, 4]),
+        (OutputTransform::Flipped90, 2, 3, [6, 3, 5, 2, 4, 1]),
+        (OutputTransform::Flipped180, 3, 2, [4, 5, 6, 1, 2, 3]),
+        (OutputTransform::Flipped270, 2, 3, [1, 4, 2, 5, 3, 6]),
+    ]);
+    for (transform, width, height, ids) in cases.drain(..) {
+        let expected: Vec<u8> = ids.into_iter().flat_map(|id| [id, 10, 20, 255]).collect();
+        assert_eq!(
+            apply_image_transform(&src, 3, 2, transform),
+            (expected, width, height)
+        );
+    }
+    assert_eq!(
+        apply_image_transform(&src, 3, 2, OutputTransform::Normal),
+        (src, 3, 2)
+    );
+}
+
+#[test]
+fn zero_area_with_extreme_dimensions_does_not_iterate_or_allocate() {
+    for transform in transforms() {
+        for (width, height) in [(0, u32::MAX), (u32::MAX, 0), (0, 0)] {
+            let (data, w, h) = apply_image_transform(&[], width, height, transform);
+            assert!(data.is_empty());
+            let swapped = matches!(
+                transform,
+                OutputTransform::Rotate90 | OutputTransform::Rotate270
+            );
+            #[cfg(target_os = "linux")]
+            let swapped = swapped
+                || matches!(
+                    transform,
+                    OutputTransform::Flipped90 | OutputTransform::Flipped270
+                );
+            assert_eq!(
+                (w, h),
+                if swapped {
+                    (height, width)
+                } else {
+                    (width, height)
+                }
+            );
+        }
+    }
+    assert_eq!(rotate_90(&[], 0, u32::MAX), (Vec::new(), u32::MAX, 0));
+    assert_eq!(rotate_180(&[], u32::MAX, 0), (Vec::new(), u32::MAX, 0));
+    assert_eq!(rotate_270(&[], u32::MAX, 0), (Vec::new(), 0, u32::MAX));
+}

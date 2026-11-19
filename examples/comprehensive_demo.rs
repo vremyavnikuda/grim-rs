@@ -151,6 +151,7 @@ fn main() -> Result<()> {
         let multi_result = grim.capture_outputs(params)?;
         println!("Captured {} outputs", multi_result.outputs().len());
         for (output_name, capture) in multi_result.outputs().iter() {
+            let output_name = output_name.trim_start_matches("\\\\.\\");
             let filename =
                 generate_demo_filename(&format!("multi_{}", output_name.to_lowercase()), "png");
             grim.save_png(capture.data(), capture.width(), capture.height(), &filename)?;
