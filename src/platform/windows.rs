@@ -472,6 +472,11 @@ impl WindowsCapture {
             ));
         }
         let info = self.find_output(output_name)?;
+        if region.right() > info.width || region.bottom() > info.height {
+            return Err(Error::InvalidRegion(
+                "Capture region extends outside output boundaries".to_string(),
+            ));
+        }
         self.get_dup(&info)?;
         let (mut final_data, mut final_width, mut final_height) =
             self.capture_frame(&info, overlay_cursor)?;
@@ -907,6 +912,38 @@ mod tests {
     #[test]
     fn build_outputs_empty_returns_no_outputs() {
         assert!(matches!(build_outputs(&[]), Err(Error::NoOutputs)));
+    }
+
+    #[test]
+    fn output_capture_rejects_out_of_bounds_regions_before_duplication() {
+        let desc = DXGI_OUTPUT_DESC {
+            DesktopCoordinates: RECT {
+                right: 16,
+                bottom: 8,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut info = OutputInfo::from_desc(&desc, 0, 0);
+        info.name = "DISPLAY1".to_string();
+        let mut capture = WindowsCapture {
+            // Invalid regions must be rejected before a D3D device is needed.
+            adapters: Vec::new(),
+            output_info: vec![info],
+            dup_cache: HashMap::new(),
+            factory: unsafe { CreateDXGIFactory1() }.unwrap(),
+        };
+        for region in [
+            Region::new(15, 0, 2, 1),
+            Region::new(0, 7, 1, 2),
+            Region::new(16, 0, 1, 1),
+            Region::new(i32::MAX, 0, 2, 1),
+        ] {
+            assert!(matches!(
+                capture.capture_output_raw("DISPLAY1", region, false),
+                Err(Error::InvalidRegion(_))
+            ));
+        }
     }
 
     #[test]

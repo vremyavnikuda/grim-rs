@@ -128,7 +128,7 @@ fn main() -> grim_rs::Result<()> {
     let mut grim = Grim::new()?;
     let effective_scale = resolve_effective_scale(&mut grim, opts.scale)?;
     let result = if let Some(ref output_name) = opts.output_name {
-        if opts.with_cursor {
+        if opts.with_cursor || opts.geometry.is_some() {
             let mut params =
                 CaptureParameters::new(output_name.clone()).overlay_cursor(opts.with_cursor);
             if let Some(region) = opts.geometry {
