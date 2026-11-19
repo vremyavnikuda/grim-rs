@@ -1,4 +1,5 @@
-use chrono::Local;
+use grim_rs::LocalDateTime;
+
 /// Comprehensive demonstration of all grim-rs screenshot capabilities.
 ///
 /// This example demonstrates every available method in the grim-rs API,
@@ -15,13 +16,8 @@ use std::io::Write;
 /// Generate filename with timestamp (like grim-rs does by default)
 /// Format: YYYYMMDD_HHhMMmSSs_grim_demo.ext
 fn generate_demo_filename(label: &str, extension: &str) -> String {
-    let now = Local::now();
-    format!(
-        "{}_grim_rs_demo_{}.{}",
-        now.format("%Y%m%d_%Hh%Mm%Ss"),
-        label,
-        extension
-    )
+    let now = LocalDateTime::now();
+    format!("{}_grim_rs_demo_{}.{}", now, label, extension)
 }
 
 fn main() -> Result<()> {
@@ -155,6 +151,7 @@ fn main() -> Result<()> {
         let multi_result = grim.capture_outputs(params)?;
         println!("Captured {} outputs", multi_result.outputs().len());
         for (output_name, capture) in multi_result.outputs().iter() {
+            let output_name = output_name.trim_start_matches("\\\\.\\");
             let filename =
                 generate_demo_filename(&format!("multi_{}", output_name.to_lowercase()), "png");
             grim.save_png(capture.data(), capture.width(), capture.height(), &filename)?;

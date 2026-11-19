@@ -548,7 +548,7 @@ impl MultiOutputCaptureResult {
 use grim_rs::Grim;
 
 // Using Default trait (this panicked on failure)
-let mut grim = Grim::default(); // ❌ No longer compiles!
+let mut grim = Grim::default(); // does not compile anymore
 ```
 
 **After (0.1.3):**
@@ -556,7 +556,7 @@ let mut grim = Grim::default(); // ❌ No longer compiles!
 use grim_rs::Grim;
 
 // Use new() which returns Result
-let mut grim = Grim::new()?; // ✅ Proper error handling
+let mut grim = Grim::new()?; // proper error handling
 ```
 
 ### Why This Change?

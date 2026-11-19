@@ -38,16 +38,22 @@ impl Region {
         self.width <= 0 || self.height <= 0
     }
 
+    pub(crate) fn right(&self) -> i32 {
+        self.x.saturating_add(self.width)
+    }
+
+    pub(crate) fn bottom(&self) -> i32 {
+        self.y.saturating_add(self.height)
+    }
+
     pub fn intersects(&self, other: &Region) -> bool {
         if self.is_empty() || other.is_empty() {
             return false;
         }
-
         let x1 = self.x.max(other.x);
         let y1 = self.y.max(other.y);
-        let x2 = (self.x + self.width).min(other.x + other.width);
-        let y2 = (self.y + self.height).min(other.y + other.height);
-
+        let x2 = self.right().min(other.right());
+        let y2 = self.bottom().min(other.bottom());
         x2 > x1 && y2 > y1
     }
 
@@ -55,12 +61,10 @@ impl Region {
         if !self.intersects(other) {
             return None;
         }
-
         let x1 = self.x.max(other.x);
         let y1 = self.y.max(other.y);
-        let x2 = (self.x + self.width).min(other.x + other.width);
-        let y2 = (self.y + self.height).min(other.y + other.height);
-
+        let x2 = self.right().min(other.right());
+        let y2 = self.bottom().min(other.bottom());
         Some(Region::new(x1, y1, x2 - x1, y2 - y1))
     }
 }
@@ -73,20 +77,16 @@ impl fmt::Display for Region {
 
 impl std::str::FromStr for Region {
     type Err = crate::Error;
-
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let parts: Vec<&str> = s.split(' ').collect();
         if parts.len() != 2 {
             return Err(crate::Error::InvalidGeometry(s.to_string()));
         }
-
         let xy: Vec<&str> = parts[0].split(',').collect();
         let wh: Vec<&str> = parts[1].split('x').collect();
-
         if xy.len() != 2 || wh.len() != 2 {
             return Err(crate::Error::InvalidGeometry(s.to_string()));
         }
-
         let x = xy[0]
             .parse()
             .map_err(|_| crate::Error::InvalidGeometry(s.to_string()))?;
@@ -99,7 +99,6 @@ impl std::str::FromStr for Region {
         let height = wh[1]
             .parse()
             .map_err(|_| crate::Error::InvalidGeometry(s.to_string()))?;
-
         Ok(Region::new(x, y, width, height))
     }
 }

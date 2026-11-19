@@ -50,10 +50,8 @@ fn test_scaling_failed_error() {
 fn test_existing_error_types_still_work() {
     let err = Error::NoOutputs;
     assert_eq!(err.to_string(), "No outputs available");
-
     let err = Error::OutputNotFound("HDMI-1".to_string());
     assert_eq!(err.to_string(), "Output not found: HDMI-1");
-
     let err = Error::InvalidRegion("region too small".to_string());
     assert_eq!(err.to_string(), "Invalid capture region: region too small");
 }

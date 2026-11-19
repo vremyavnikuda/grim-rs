@@ -66,6 +66,22 @@ jobs:
       - name: Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
+  msrv:
+    name: MSRV (1.82)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.82
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check all targets on MSRV toolchain
+        run: cargo check --all-targets --all-features
+
   checks-linux:
     name: Checks (Linux)
     runs-on: ubuntu-latest

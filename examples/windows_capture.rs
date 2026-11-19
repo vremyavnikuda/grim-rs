@@ -3,11 +3,10 @@
 //! Usage:
 //!   cargo run --example windows_capture
 
-use chrono::Local;
-use grim_rs::{CaptureParameters, Grim, Region};
+use grim_rs::{CaptureParameters, Grim, LocalDateTime, Region};
 
 fn filename(label: &str, ext: &str) -> String {
-    let ts = Local::now().format("%Y%m%d_%H%M%S");
+    let ts = LocalDateTime::now();
     format!("{}_{}.{}", ts, label, ext)
 }
 
@@ -75,9 +74,7 @@ fn main() -> grim_rs::Result<()> {
     }
     if outputs.len() >= 2 {
         let params = vec![
-            CaptureParameters::new(outputs[0].name())
-                .overlay_cursor(true)
-                .scale(0.5),
+            CaptureParameters::new(outputs[0].name()).overlay_cursor(true),
             CaptureParameters::new(outputs[1].name()).region(Region::new(0, 0, 400, 300)),
         ];
         let multi = grim.capture_outputs_with_scale(params, 1.0)?;

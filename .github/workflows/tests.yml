@@ -35,7 +35,6 @@ jobs:
           cargo test --all-features --lib --bins --tests --examples -- \
             --skip test_mock_capture \
             --skip test_scale_functionality \
-            --skip test_ppm_format \
             --skip test_to_png \
             --skip test_to_jpeg \
             --skip test_new_ext_constructor \
@@ -65,7 +64,6 @@ jobs:
           cargo test --all-features --lib --bins --tests --examples -- `
             --skip test_mock_capture `
             --skip test_scale_functionality `
-            --skip test_ppm_format `
             --skip test_to_png `
             --skip test_to_jpeg `
             --skip test_new_ext_constructor `

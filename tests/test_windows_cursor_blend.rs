@@ -1,7 +1,6 @@
 #[cfg(target_os = "windows")]
 mod windows_cursor_blend {
-    use grim_rs::blend_cursor_rgba;
-
+    use grim_rs::{blend_cursor_rgba, blend_mono_cursor_rgba};
     fn make_frame(w: u32, h: u32, r: u8, g: u8, b: u8, a: u8) -> Vec<u8> {
         let mut buf = vec![0u8; (w * h * 4) as usize];
         for y in 0..h {
@@ -131,5 +130,76 @@ mod windows_cursor_blend {
         assert_eq!(frame[0], expected_r);
         assert_eq!(frame[1], expected_g);
         assert_eq!(frame[3], 255);
+    }
+
+    #[test]
+    fn mono_like_buffer_does_not_panic() {
+        // A DXGI_OUTDUPL_POINTER_SHAPE_TYPE_MONOCHROMATIC buffer is 1bpp,
+        // so its pitch is far smaller than width * 4 and the old indexing
+        // ran past the end. Feeding such a buffer must not panic.
+        let mut frame = make_frame(10, 10, 50, 50, 50, 255);
+        let original = frame.clone();
+        let mono_buf = vec![0xFFu8; 8]; // 8x4 cursor at 1bpp, pitch 1
+        blend_cursor_rgba(&mut frame, (10, 10), &mono_buf, (8, 4), 1, (0, 0));
+        assert_eq!(frame, original);
+    }
+
+    #[test]
+    fn mono_like_buffer_with_large_pitch_does_not_panic() {
+        let mut frame = make_frame(10, 10, 50, 50, 50, 255);
+        let original = frame.clone();
+        let mono_buf = vec![0xAAu8; 4]; // 32x4 cursor at 1bpp, pitch 1
+        blend_cursor_rgba(&mut frame, (10, 10), &mono_buf, (32, 4), 1, (0, 0));
+        assert_eq!(frame, original);
+    }
+
+    /// Build a 4x4 visible monochrome cursor whose four columns exercise the
+    /// AND/XOR combinations: transparent, black, white, invert.
+    fn make_mono_cursor() -> Vec<u8> {
+        // bits are MSB-first per byte; only the top nibble is used (width 4)
+        // AND rows: 0,0,1,1 -> 0x30 ; XOR rows: 0,1,0,1 -> 0x50
+        let mut buf = vec![0x30u8; 4];
+        buf.extend_from_slice(&[0x50u8; 4]);
+        buf
+    }
+
+    #[test]
+    fn mono_cursor_decodes_all_bit_combinations() {
+        let mut frame = make_frame(4, 4, 100, 100, 100, 255);
+        let cursor = make_mono_cursor();
+        blend_mono_cursor_rgba(&mut frame, (4, 4), &cursor, (4, 4), 1, (0, 0));
+        let px = |x: u32| (x * 4) as usize;
+        // AND=0/XOR=0 -> opaque black
+        assert_eq!(&frame[px(0)..px(0) + 4], &[0, 0, 0, 255]);
+        // AND=0/XOR=1 -> opaque white
+        assert_eq!(&frame[px(1)..px(1) + 4], &[255, 255, 255, 255]);
+        // AND=1/XOR=0 -> transparent
+        assert_eq!(&frame[px(2)..px(2) + 4], &[100, 100, 100, 255]);
+        // AND=1/XOR=1 -> inverted frame pixel
+        assert_eq!(&frame[px(3)..px(3) + 4], &[155, 155, 155, 255]);
+    }
+
+    #[test]
+    fn mono_cursor_short_buffer_does_not_panic() {
+        let mut frame = make_frame(4, 4, 100, 100, 100, 255);
+        let original = frame.clone();
+        let truncated = vec![0x30u8; 2]; // XOR mask missing entirely
+        blend_mono_cursor_rgba(&mut frame, (4, 4), &truncated, (4, 4), 1, (0, 0));
+        assert_eq!(frame, original);
+    }
+
+    #[test]
+    fn mono_cursor_offset_blends_at_position() {
+        let mut frame = make_frame(8, 8, 100, 100, 100, 255);
+        let cursor = make_mono_cursor();
+        blend_mono_cursor_rgba(&mut frame, (8, 8), &cursor, (4, 4), 1, (2, 3));
+        // (0,0) untouched
+        assert_eq!(&frame[0..4], &[100, 100, 100, 255]);
+        // black pixel landed at (2,3)
+        let i = ((3 * 8 + 2) * 4) as usize;
+        assert_eq!(&frame[i..i + 4], &[0, 0, 0, 255]);
+        // white pixel at (3,3)
+        let j = ((3 * 8 + 3) * 4) as usize;
+        assert_eq!(&frame[j..j + 4], &[255, 255, 255, 255]);
     }
 }

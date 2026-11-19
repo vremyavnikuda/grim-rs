@@ -3,6 +3,7 @@
     "fmt": "Format",
     "audit": "Security audit",
     "clippy": "Clippy",
+    "msrv": "MSRV (1.82)",
     "checks-linux": "Checks (Linux)",
     "checks-windows": "Checks (Windows)",
     "benches-linux": "Benches (Linux)",

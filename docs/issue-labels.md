@@ -1,8 +1,8 @@
 # Issue forms and label policy
 
 The policy runs in `vremyavnikuda/grim-rs` through `.github/workflows/labeler.yml`.
-It reads GitHub state and changes only the labels it owns. It never executes code
-from a pull request with its write token.
+It reads GitHub state, reconciles owned labels, and warns/closes inactive issues.
+It never executes code from a pull request with its write token.
 
 ## Creating an issue
 
@@ -31,8 +31,11 @@ workflow warning. API-created issues without the fields need manual triage.
 | `documentation`, `performance`, `refactor`, `dependencies` | Maintainer |
 | `priority:critical`, `priority:high`, `priority:medium`, `priority:low` | Maintainer; at most one |
 | `needs-investigation`, `needs-reproduction`, `waiting-for-feedback` | Maintainer |
-| `help wanted`, `good first issue`, `stale` | Maintainer |
+| `help wanted`, `good first issue` | Maintainer |
+| `stale` | Automation: inactivity warning and closure reason |
 | `duplicate`, `invalid`, `wontfix` | Maintainer; do not automatically close issues |
+| `resolution:completed` | Maintainer, or verified closure by a merged PR |
+| `resolution:unconfirmed` | Maintainer |
 
 To correct classification, change labels and then add `triage:confirmed`.
 Subsequent description edits preserve it. Removing confirmation synchronizes
@@ -81,22 +84,28 @@ Automatic CI/conflict causes are aggregated across all open linked PRs.
 
 ## PR stages and CI
 
-A PR has one stage, plus `status:blocked` if a cause exists:
+A new open PR starts with `status:in-progress`, whether draft or non-draft.
+Its stages are mutually exclusive:
 
-- Draft: `status:in-progress`.
-- Ready for review: `status:need-review`.
-- Maintainer-selected stages: `status:needs-rework`, `status:needs-testing`,
-  `status:ready-to-merge`.
+- Implementation: `status:in-progress`.
+- Implementation finished, testing requested: maintainer selects `status:needs-testing`,
+  replacing `status:in-progress`.
+- Review requested: `status:need-review`, selected manually or by ready-for-review.
+- Rework or merge approval: maintainer selects `status:needs-rework` or `status:ready-to-merge`.
 
-Blocking preserves rework/testing stages. It removes `ready-to-merge`, which must
-be approved again manually after recovery. New commits/base changes invalidate
-ready; editing the description does not reset rework/testing. A ready label is
+Blocking replaces `in-progress` with `status:blocked`, but preserves explicit
+review/rework/testing stages alongside `status:blocked`. When unblocked, the
+selected stage remains; otherwise `in-progress` returns. Blocking removes
+`ready-to-merge`, which must be approved again manually after recovery.
+New commits/base changes return review/merge readiness to `in-progress`;
+explicit rework/testing stages remain. Moving a PR back to draft resumes
+`in-progress`. A ready label is
 accepted only for a non-draft PR with complete successful mandatory CI, a known
 absence of merge conflicts, and no blockers.
 
 All jobs in these workflows are mandatory, defined in `.github/label-policy.json`:
 
-- `CI`: Format, Security audit, Clippy, Checks and Benches on Linux/Windows.
+- `CI`: Format, Security audit, Clippy, MSRV (1.82), Checks and Benches on Linux/Windows.
 - `Tests`: Linux and Windows.
 - `PR Quality`: No merge commits and Conventional commits.
 
@@ -123,6 +132,60 @@ configured separately if GitHub must prevent merging failed checks.
 
 ## Reconciliation and closed objects
 
+### Closure reasons
+
+An issue's working status is separate from its closure reason:
+
+| Reason | Selection |
+| --- | --- |
+| `resolution:completed` | Explicit maintainer choice, or the merged PR which actually closed the issue |
+| `resolution:unconfirmed` | Maintainer could not confirm the report or obtain required information |
+| `duplicate` | Maintainer identifies the original issue and includes its link |
+| `stale` | Inactivity policy below; does not mean the task was completed |
+| `wontfix` | Maintainer decides against implementation or a fix |
+
+Select the reason before or after closing. Selecting a reason does not itself
+close the issue. Only one reason is retained; a newer manual choice replaces
+the previous reason. Automation never replaces a selected reason with completed.
+
+Automatic completion requires the latest GitHub `ClosedEvent` to identify a
+merged PR as the closer, matching the current closure timestamp and completed
+state reason. A merely linked/merged PR is insufficient. Ordinary manual Close,
+including GitHub's default completed state reason, does not infer this label.
+Unknown closure data leaves the reason unchanged.
+
+Reopening removes reasons from the previous closure and recalculates the working
+status. A new manual reason selected after reopening remains a new choice.
+Type, platform, backend, priority, topic and manual blocker labels are retained.
+Scheduled sweeps also repair closure labels and working statuses on closed issues.
+
+### Inactive issues
+
+Every scheduled sweep (every 15 minutes) checks open issues, excluding PRs.
+After 30 days without human activity, it posts a warning and adds `stale`.
+After seven full days from that warning without activity, it closes the issue
+as `not_planned`, retaining `stale`. This never marks the issue as completed.
+The first sweep always allows a full seven-day warning period, even for old issues.
+
+Activity includes human comments and edits, report edits, reopening, assignment,
+milestone changes and manual label changes. Bot comments, bot edits and automatic
+label changes do not reset the timer; the issue's general `updated_at` is not
+used as its inactivity clock. Human activity removes `stale` and restarts the
+30-day period. Manually adding `stale` alone cannot bypass the warning period.
+
+An active Development link, any `blocker:*`, `priority:high`, `priority:critical`
+or `help wanted` exempts an issue and removes `stale`. An explicitly selected
+non-stale closure reason is also protected from automatic stale closure. Unknown Development or
+incomplete activity data postpones action. Activity and exclusions are checked
+again before closure. GitHub cannot atomically check all activity and close an
+issue; a reply racing the final close request can require reopening it.
+
+Only warnings authored by `github-actions[bot]` identify an automatic warning
+period. Removed stale labels invalidate the previous warning cycle. Dry runs
+report proposed actions without comments, labels or closures.
+
+### Working labels
+
 Issue/PR events and trusted CI completion trigger reconciliation. Development
 changes are also discovered by the 15-minute scheduled sweep; GitHub schedules
 can be delayed. All connections use pagination. API failures preserve unresolved
@@ -134,7 +197,7 @@ run.
 
 Closing an issue/PR removes working statuses and automatic causes, while keeping
 manual labels for history. Reopening recalculates sources. A retained manual
-blocker applies again. A reopened PR starts with review, or in-progress if draft.
+blocker applies again. A reopened PR starts with `in-progress`.
 
 In Actions, run Labeler manually with `dry_run=true` to preview status changes.
 Manual runs default to dry-run; event and scheduled runs apply owned differences.

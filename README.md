@@ -5,7 +5,7 @@
 > [!IMPORTANT]
 > [`CHANGELOG`](CHANGELOG.md) · [`API`](doc/api.md) · [`MIGRATION`](MIGRATION.md) · [`Examples`](doc/library_examples.md)
 
-> if you like this project, then the best way to express gratitude is to give it a star ⭐, it doesn't cost you anything, but I understand that I'm moving the project in the right direction.
+> if you like this project, then the best way to express gratitude is to give it a star, it doesn't cost you anything, but I understand that I'm moving the project in the right direction.
 
 ___
 
@@ -35,7 +35,7 @@ cargo add grim-rs
 grim-rs = "0.2"
 ```
 
-**MSRV:** Rust 1.68+
+**MSRV:** Rust 1.82+
 
 ```rust,no_run
 use grim_rs::Grim;

@@ -9,7 +9,6 @@ fn main() -> grim_rs::Result<()> {
     let mut opts = Options::default();
     let mut output_file = None;
     let mut arg_idx = 1;
-
     while arg_idx < args.len() {
         match args[arg_idx].as_str() {
             "-h" | "--help" => {
@@ -118,25 +117,22 @@ fn main() -> grim_rs::Result<()> {
         }
         arg_idx += 1;
     }
-
+    if opts.with_cursor && opts.output_name.is_none() {
+        eprintln!("Warning: -c is only supported together with -o; cursor will not be included");
+    }
     let output_file = if let Some(file) = output_file {
         file
     } else {
         generate_default_filename(opts.filetype)?
     };
-
     let mut grim = Grim::new()?;
     let effective_scale = resolve_effective_scale(&mut grim, opts.scale)?;
-
     let result = if let Some(ref output_name) = opts.output_name {
-        if opts.with_cursor {
+        if opts.with_cursor || opts.geometry.is_some() {
             let mut params =
                 CaptureParameters::new(output_name.clone()).overlay_cursor(opts.with_cursor);
             if let Some(region) = opts.geometry {
                 params = params.region(region);
-            }
-            if let Some(scale) = opts.scale {
-                params = params.scale(scale);
             }
             let multi_result = grim.capture_outputs_with_scale(vec![params], effective_scale)?;
             let mut outputs = multi_result.into_outputs();
@@ -153,9 +149,7 @@ fn main() -> grim_rs::Result<()> {
     } else {
         grim.capture_all_with_scale(effective_scale)?
     };
-
     save_or_write_result(&grim, &result, &output_file, &opts)?;
-
     Ok(())
 }
 
@@ -317,12 +311,9 @@ fn save_jpeg_to_file(
 
 #[cfg(not(feature = "jpeg"))]
 fn create_jpeg_not_supported_error() -> grim_rs::Error {
-    grim_rs::Error::ImageProcessing(image::ImageError::Unsupported(
-        image::error::UnsupportedError::from_format_and_kind(
-            image::error::ImageFormatHint::Name("JPEG".to_string()),
-            image::error::UnsupportedErrorKind::Format(image::ImageFormat::Jpeg.into()),
-        ),
-    ))
+    grim_rs::Error::Unsupported(
+        "JPEG support is disabled; rebuild with --features jpeg".to_string(),
+    )
 }
 
 fn print_help() {
@@ -348,7 +339,6 @@ fn resolve_effective_scale(grim: &mut Grim, requested_scale: Option<f64>) -> gri
     if let Some(scale) = requested_scale {
         return Ok(scale);
     }
-
     let outputs = grim.get_outputs()?;
     Ok(default_scale_from_output_scales(
         outputs.iter().map(|output| output.scale()),
@@ -368,20 +358,14 @@ where
 }
 
 fn generate_default_filename(filetype: FileType) -> grim_rs::Result<String> {
-    use chrono::Local;
-
     // Format: YYYYMMDD_HHhMMmSSs_grim.ext (e.g., 20241004_10h30m45s_grim.png)
-    let now = Local::now();
-    let timestamp = now.format("%Y%m%d_%Hh%Mm%Ss");
-
+    let timestamp = grim_rs::LocalDateTime::now();
     let ext = match filetype {
         FileType::Png => "png",
         FileType::Jpeg => "jpeg",
     };
-
     let output_dir = get_output_dir();
     let filename = format!("{}_grim.{}", timestamp, ext);
-
     Ok(output_dir.join(filename).to_string_lossy().to_string())
 }
 
@@ -392,29 +376,23 @@ fn get_xdg_pictures_dir() -> Option<PathBuf> {
         let expanded = expand_home_dir(&pictures_dir);
         return Some(PathBuf::from(expanded));
     }
-
     // Parse ~/.config/user-dirs.dirs
     let config_home = env::var("XDG_CONFIG_HOME").ok().or_else(|| {
         env::var("HOME")
             .ok()
             .map(|home| format!("{}/.config", home))
     })?;
-
     let user_dirs_file = PathBuf::from(config_home).join("user-dirs.dirs");
-
     if !user_dirs_file.exists() {
         return None;
     }
-
     let file = fs::File::open(user_dirs_file).ok()?;
     let reader = io::BufReader::new(file);
-
     for line in reader.lines().map_while(Result::ok) {
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
-
         // Look for XDG_PICTURES_DIR="..."
         if line.starts_with("XDG_PICTURES_DIR=") {
             if let Some(value) = line.strip_prefix("XDG_PICTURES_DIR=") {
@@ -425,7 +403,6 @@ fn get_xdg_pictures_dir() -> Option<PathBuf> {
             }
         }
     }
-
     None
 }
 
@@ -448,21 +425,18 @@ fn get_output_dir() -> PathBuf {
             return path;
         }
     }
-
     // XDG_PICTURES_DIR
     if let Some(pictures_dir) = get_xdg_pictures_dir() {
         if pictures_dir.exists() {
             return pictures_dir;
         }
     }
-
     PathBuf::from(".")
 }
 
 #[cfg(test)]
 mod tests {
     use super::default_scale_from_output_scales;
-
     #[test]
     fn default_scale_uses_max_positive_scale() {
         assert_eq!(default_scale_from_output_scales([1, 2, 1]), 2.0);

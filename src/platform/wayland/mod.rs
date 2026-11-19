@@ -2,12 +2,12 @@ pub(super) use crate::{
     CaptureParameters, CaptureResult, Error, MultiOutputCaptureResult, Output, Region, Result,
 };
 pub(super) use std::collections::HashMap;
+
 pub(super) use std::os::fd::{AsRawFd, BorrowedFd};
 pub(super) use std::sync::{Arc, Mutex};
 pub(super) use wayland_client::{
     protocol::{
         wl_buffer::WlBuffer,
-        wl_compositor::WlCompositor,
         wl_output::WlOutput,
         wl_registry::WlRegistry,
         wl_shm::{Format as ShmFormat, WlShm},
@@ -37,6 +37,7 @@ mod capture;
 mod events;
 
 pub(super) const ZWLR_SCREENCOPY_FRAME_V1_FLAGS_Y_INVERT: u32 = 1;
+
 pub(super) const MAX_ATTEMPTS: usize = 100;
 
 /// Captures which capture protocol is in use and holds its specific manager objects.
@@ -61,6 +62,7 @@ pub(super) struct FrameState {
     flags: u32,
     linux_dmabuf_received: bool,
     constraints_done: bool,
+    failure: Option<String>,
 }
 
 /// Safely lock a FrameState mutex, converting poisoned mutex errors to Result.
@@ -103,7 +105,6 @@ pub(super) fn guess_output_logical_geometry(info: &mut OutputInfo) {
     info.logical_y = info.y;
     info.logical_width = info.width / info.scale;
     info.logical_height = info.height / info.scale;
-
     crate::transform::apply_output_transform(
         info.transform.into(),
         &mut info.logical_width,
@@ -118,7 +119,6 @@ pub(super) fn update_logical_scale(info: &mut OutputInfo) {
     if info.width <= 0 || info.height <= 0 || info.logical_width <= 0 || info.logical_height <= 0 {
         return;
     }
-
     let mut physical_width = info.width;
     let mut physical_height = info.height;
     crate::transform::apply_output_transform(
@@ -126,7 +126,6 @@ pub(super) fn update_logical_scale(info: &mut OutputInfo) {
         &mut physical_width,
         &mut physical_height,
     );
-
     info.logical_scale = (physical_width as f64) / (info.logical_width as f64);
 }
 
@@ -149,7 +148,10 @@ pub(super) struct OutputInfo {
 }
 
 pub(super) struct WaylandGlobals {
-    compositor: Option<WlCompositor>,
+    /// Set after `new` binds the one-time globals; later registry dumps from
+    /// `refresh_outputs` only re-enumerate `wl_output` and must not re-bind
+    /// managers (each re-bind wastes a server-side object per capture).
+    managers_bound: bool,
     shm: Option<WlShm>,
     screencopy_manager: Option<ZwlrScreencopyManagerV1>,
     ext_source_manager: Option<ExtOutputImageCaptureSourceManagerV1>,
@@ -182,7 +184,7 @@ impl WaylandCapture {
             Error::WaylandConnection(format!("Failed to connect to Wayland: {}", e))
         })?;
         let globals = WaylandGlobals {
-            compositor: None,
+            managers_bound: false,
             shm: None,
             screencopy_manager: None,
             ext_source_manager: None,
@@ -192,7 +194,6 @@ impl WaylandCapture {
             output_info: HashMap::new(),
             output_xdg_map: HashMap::new(),
         };
-
         let mut event_queue = connection.new_event_queue();
         let qh = event_queue.handle();
         let _registry = connection.display().get_registry(&qh, ());
@@ -204,7 +205,6 @@ impl WaylandCapture {
         event_queue.roundtrip(&mut instance).map_err(|e| {
             Error::WaylandConnection(format!("Failed to initialize Wayland globals: {}", e))
         })?;
-
         let backend = match preference {
             crate::Backend::ExtImageCopyCapture => {
                 let source_manager =
@@ -258,18 +258,17 @@ impl WaylandCapture {
                 }
             }
         };
-
         if instance.globals.shm.is_none() {
             return Err(Error::UnsupportedProtocol(
                 "wl_shm not available".to_string(),
             ));
         }
-
         let backend_label = match &backend {
             CaptureBackend::WlrScreencopy { .. } => "wlr-screencopy",
             CaptureBackend::ExtImageCopyCapture { .. } => "ext-image-copy-capture-v1",
         };
         log::info!("grim-rs: using {} backend", backend_label);
+        instance.globals.managers_bound = true;
         instance.backend = Some(backend);
         Ok(instance)
     }

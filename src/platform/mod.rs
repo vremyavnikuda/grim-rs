@@ -1,10 +1,12 @@
 #[cfg(target_os = "linux")]
 pub(crate) mod wayland;
+
 #[cfg(target_os = "linux")]
 use wayland::WaylandCapture;
 
 #[cfg(target_os = "windows")]
 pub(crate) mod windows;
+
 #[cfg(target_os = "windows")]
 use windows::WindowsCapture;
 
