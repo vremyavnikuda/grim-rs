@@ -66,6 +66,26 @@ struct OutputInfo {
     output_idx: usize,
 }
 
+impl OutputInfo {
+    fn from_desc(desc: &DXGI_OUTPUT_DESC, adapter_idx: usize, output_idx: usize) -> Self {
+        let name = String::from_utf16_lossy(&desc.DeviceName)
+            .trim_end_matches('\0')
+            .to_string();
+        Self {
+            name: name.clone(),
+            x: desc.DesktopCoordinates.left,
+            y: desc.DesktopCoordinates.top,
+            // DesktopCoordinates already includes the output rotation.
+            width: desc.DesktopCoordinates.right - desc.DesktopCoordinates.left,
+            height: desc.DesktopCoordinates.bottom - desc.DesktopCoordinates.top,
+            rotation: desc.Rotation.0 as u32,
+            description: name,
+            adapter_idx,
+            output_idx,
+        }
+    }
+}
+
 struct AdapterState {
     device: ID3D11Device,
     context: ID3D11DeviceContext,
@@ -150,31 +170,11 @@ impl WindowsCapture {
                 {
                     continue;
                 }
-                let name = String::from_utf16_lossy(&desc.DeviceName)
-                    .trim_end_matches('\0')
-                    .to_string();
-                let rot = desc.Rotation.0 as u32;
-                let (w, h) = match rot {
-                    2 | 4 => (
-                        desc.DesktopCoordinates.bottom - desc.DesktopCoordinates.top,
-                        desc.DesktopCoordinates.right - desc.DesktopCoordinates.left,
-                    ),
-                    _ => (
-                        desc.DesktopCoordinates.right - desc.DesktopCoordinates.left,
-                        desc.DesktopCoordinates.bottom - desc.DesktopCoordinates.top,
-                    ),
-                };
-                output_info.push(OutputInfo {
-                    name: name.clone(),
-                    x: desc.DesktopCoordinates.left,
-                    y: desc.DesktopCoordinates.top,
-                    width: w,
-                    height: h,
-                    rotation: desc.Rotation.0 as u32,
-                    description: name.clone(),
-                    adapter_idx: adapters.len(),
-                    output_idx: output_idx as usize,
-                });
+                output_info.push(OutputInfo::from_desc(
+                    &desc,
+                    adapters.len(),
+                    output_idx as usize,
+                ));
                 has_outputs = true;
             }
             if has_outputs {
@@ -281,7 +281,7 @@ impl WindowsCapture {
                     std::ptr::addr_of_mut!(desktop_resource),
                 )
             };
-            let (mut pixels, width, height) = match result {
+            let (pixels, width, height) = match result {
                 Ok(()) => {
                     let resource = match desktop_resource {
                         Some(r) => r,
@@ -421,50 +421,25 @@ impl WindowsCapture {
                 }
             };
             entry.last_frame = Some((pixels.clone(), width, height));
-            // The shape comes from the cache because DXGI only resends
-            // it when it changes; the position is the last one DXGI
-            // reported (frames without mouse movement carry no update).
             if overlay_cursor {
-                let pointer = entry.pointer_position;
                 log::debug!(
                     "blending cursor: shape_cached={} pointer={:?}",
                     entry.cursor_shape.is_some(),
-                    pointer.map(|p| (p.Position, p.Visible.as_bool()))
+                    entry
+                        .pointer_position
+                        .map(|p| (p.Position, p.Visible.as_bool()))
                 );
-                if let Some(pointer) = pointer.filter(|p| p.Visible.as_bool()) {
-                    if let Some(CachedCursorShape { info, buf }) = &entry.cursor_shape {
-                        let screen_x = pointer.Position.x - info.HotSpot.x;
-                        let screen_y = pointer.Position.y - info.HotSpot.y;
-                        if info.Type == DXGI_OUTDUPL_POINTER_SHAPE_TYPE_MONOCHROME.0 as u32 {
-                            // A monochromatic shape packs two 1bpp masks;
-                            // Height counts both, so the visible height is
-                            // half of it.
-                            blend_mono_cursor_rgba(
-                                &mut pixels,
-                                (width, height),
-                                buf,
-                                (info.Width, info.Height / 2),
-                                info.Pitch as usize,
-                                (screen_x, screen_y),
-                            );
-                        } else {
-                            // COLOR shapes are 32-bit BGRA. MASKED_COLOR
-                            // stores the color bitmap first with the same
-                            // pitch, so blending it as color is safe (the
-                            // AND mask tail is simply never read).
-                            blend_cursor_rgba(
-                                &mut pixels,
-                                (width, height),
-                                buf,
-                                (info.Width, info.Height),
-                                info.Pitch as usize,
-                                (screen_x, screen_y),
-                            );
-                        }
-                    }
-                }
             }
-            return Ok((pixels, width, height));
+            return Ok(prepare_frame(
+                (pixels, width, height),
+                info.rotation,
+                entry.cursor_shape.as_ref(),
+                if overlay_cursor {
+                    entry.pointer_position
+                } else {
+                    None
+                },
+            ));
         }
     }
 
@@ -498,18 +473,8 @@ impl WindowsCapture {
         }
         let info = self.find_output(output_name)?;
         self.get_dup(&info)?;
-        let (full_pixels, full_width, full_height) = self.capture_frame(&info, overlay_cursor)?;
-        // Apply rotation transform FIRST — the DXGI texture is in GPU-native
-        // orientation, but the crop region is in logical (post-rotation) coords.
-        use crate::transform::{apply_image_transform, OutputTransform};
-        let transform = match info.rotation {
-            2 => OutputTransform::Rotate90,
-            3 => OutputTransform::Rotate180,
-            4 => OutputTransform::Rotate270,
-            _ => OutputTransform::Normal,
-        };
         let (mut final_data, mut final_width, mut final_height) =
-            apply_image_transform(&full_pixels, full_width, full_height, transform);
+            self.capture_frame(&info, overlay_cursor)?;
         // Crop to the requested region (now in logical coords matching the image)
         let crop_x = region.x() as u32;
         let crop_y = region.y() as u32;
@@ -640,6 +605,61 @@ impl WindowsCapture {
         }
         Ok(MultiOutputCaptureResult::new(scaled_results))
     }
+}
+
+fn prepare_frame(
+    (pixels, width, height): (Vec<u8>, u32, u32),
+    rotation: u32,
+    cursor_shape: Option<&CachedCursorShape>,
+    pointer: Option<DXGI_OUTDUPL_POINTER_POSITION>,
+) -> (Vec<u8>, u32, u32) {
+    use crate::transform::{apply_image_transform, OutputTransform};
+    let transform = match rotation {
+        2 => OutputTransform::Rotate90,
+        3 => OutputTransform::Rotate180,
+        4 => OutputTransform::Rotate270,
+        _ => OutputTransform::Normal,
+    };
+    // Pointer positions and crop regions use the rotated desktop coordinates.
+    let (mut pixels, width, height) = if transform == OutputTransform::Normal {
+        (pixels, width, height)
+    } else {
+        apply_image_transform(&pixels, width, height, transform)
+    };
+    if let Some(pointer) = pointer.filter(|p| p.Visible.as_bool()) {
+        if let Some(CachedCursorShape { info, buf }) = cursor_shape {
+            // DXGI reports the shape's top-left corner, independent of HotSpot.
+            let screen_x = pointer.Position.x;
+            let screen_y = pointer.Position.y;
+            if info.Type == DXGI_OUTDUPL_POINTER_SHAPE_TYPE_MONOCHROME.0 as u32 {
+                // A monochromatic shape packs two 1bpp masks;
+                // Height counts both, so the visible height is
+                // half of it.
+                blend_mono_cursor_rgba(
+                    &mut pixels,
+                    (width, height),
+                    buf,
+                    (info.Width, info.Height / 2),
+                    info.Pitch as usize,
+                    (screen_x, screen_y),
+                );
+            } else {
+                // COLOR shapes are 32-bit BGRA. MASKED_COLOR
+                // stores the color bitmap first with the same
+                // pitch, so blending it as color is safe (the
+                // AND mask tail is simply never read).
+                blend_cursor_rgba(
+                    &mut pixels,
+                    (width, height),
+                    buf,
+                    (info.Width, info.Height),
+                    info.Pitch as usize,
+                    (screen_x, screen_y),
+                );
+            }
+        }
+    }
+    (pixels, width, height)
 }
 
 pub fn blend_cursor_rgba(
@@ -790,6 +810,99 @@ fn build_outputs(output_info: &[OutputInfo]) -> Result<Vec<Output>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use windows::Win32::Foundation::{POINT, RECT};
+    use windows::Win32::Graphics::Dxgi::Common::DXGI_MODE_ROTATION;
+    use windows::Win32::Graphics::Dxgi::DXGI_OUTDUPL_POINTER_SHAPE_TYPE_COLOR;
+
+    #[test]
+    fn output_geometry_keeps_desktop_coordinates_for_every_rotation() {
+        for rotation in 0..=4 {
+            let desc = DXGI_OUTPUT_DESC {
+                DesktopCoordinates: RECT {
+                    left: -1080,
+                    top: -100,
+                    right: 0,
+                    bottom: 1820,
+                },
+                Rotation: DXGI_MODE_ROTATION(rotation),
+                ..Default::default()
+            };
+            let info = OutputInfo::from_desc(&desc, 0, 0);
+            let outputs = build_outputs(&[info]).unwrap();
+            assert_eq!(
+                outputs[0].geometry(),
+                &Region::new(-1080, -100, 1080, 1920),
+                "rotation {rotation}"
+            );
+        }
+    }
+
+    #[test]
+    fn prepare_frame_orients_non_square_desktop_pixels() {
+        let pixels: Vec<u8> = (1..=6).flat_map(|id| [id, 0, 0, 255]).collect();
+        for (rotation, width, height, expected) in [
+            (0, 3, 2, [1, 2, 3, 4, 5, 6]),
+            (1, 3, 2, [1, 2, 3, 4, 5, 6]),
+            (2, 2, 3, [4, 1, 5, 2, 6, 3]),
+            (3, 3, 2, [6, 5, 4, 3, 2, 1]),
+            (4, 2, 3, [3, 6, 2, 5, 1, 4]),
+        ] {
+            let (data, w, h) = prepare_frame((pixels.clone(), 3, 2), rotation, None, None);
+            assert_eq!((w, h), (width, height));
+            let expected: Vec<u8> = expected
+                .into_iter()
+                .flat_map(|id| [id, 0, 0, 255])
+                .collect();
+            assert_eq!(data, expected, "rotation {rotation}");
+        }
+    }
+
+    #[test]
+    fn prepare_frame_draws_cursor_in_desktop_space_without_hotspot_offset() {
+        let pixels: Vec<u8> = (1..=6).flat_map(|id| [id, 0, 0, 255]).collect();
+        let pointer = DXGI_OUTDUPL_POINTER_POSITION {
+            Position: POINT { x: 0, y: 1 },
+            Visible: true.into(),
+        };
+        let color = CachedCursorShape {
+            info: DXGI_OUTDUPL_POINTER_SHAPE_INFO {
+                Type: DXGI_OUTDUPL_POINTER_SHAPE_TYPE_COLOR.0 as u32,
+                Width: 2,
+                Height: 1,
+                Pitch: 8,
+                HotSpot: POINT { x: 1, y: 0 },
+            },
+            buf: vec![0, 0, 160, 255, 0, 0, 176, 255],
+        };
+        let mono = CachedCursorShape {
+            info: DXGI_OUTDUPL_POINTER_SHAPE_INFO {
+                Type: DXGI_OUTDUPL_POINTER_SHAPE_TYPE_MONOCHROME.0 as u32,
+                Width: 2,
+                Height: 2,
+                Pitch: 1,
+                HotSpot: POINT { x: 1, y: 0 },
+            },
+            buf: vec![0, 0x40],
+        };
+        for (shape, first, second) in [(&color, 160, 176), (&mono, 0, 255)] {
+            for (rotation, expected) in [
+                (0, [1, 2, 3, first, second, 6]),
+                (1, [1, 2, 3, first, second, 6]),
+                (2, [4, 1, first, second, 6, 3]),
+                (3, [6, 5, 4, first, second, 1]),
+                (4, [3, 6, first, second, 1, 4]),
+            ] {
+                let (data, _, _) =
+                    prepare_frame((pixels.clone(), 3, 2), rotation, Some(shape), Some(pointer));
+                let reds: Vec<u8> = data.chunks_exact(4).map(|pixel| pixel[0]).collect();
+                assert_eq!(
+                    reds, expected,
+                    "rotation {rotation}, shape {}",
+                    shape.info.Type
+                );
+            }
+        }
+    }
 
     #[test]
     fn build_outputs_empty_returns_no_outputs() {
