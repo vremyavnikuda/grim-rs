@@ -15,9 +15,9 @@ use windows::Win32::Graphics::Direct3D11::{
 };
 use windows::Win32::Graphics::Dxgi::Common::DXGI_SAMPLE_DESC;
 use windows::Win32::Graphics::Dxgi::{
-    CreateDXGIFactory1, IDXGIAdapter1, IDXGIFactory1, IDXGIOutput, IDXGIOutputDuplication,
-    IDXGIResource, DXGI_ERROR_ACCESS_LOST, DXGI_ERROR_WAIT_TIMEOUT, DXGI_OUTDUPL_FRAME_INFO,
-    DXGI_OUTDUPL_POINTER_POSITION, DXGI_OUTDUPL_POINTER_SHAPE_INFO,
+    CreateDXGIFactory1, IDXGIAdapter, IDXGIAdapter1, IDXGIFactory1, IDXGIOutput,
+    IDXGIOutputDuplication, IDXGIResource, DXGI_ERROR_ACCESS_LOST, DXGI_ERROR_WAIT_TIMEOUT,
+    DXGI_OUTDUPL_FRAME_INFO, DXGI_OUTDUPL_POINTER_POSITION, DXGI_OUTDUPL_POINTER_SHAPE_INFO,
     DXGI_OUTDUPL_POINTER_SHAPE_TYPE_MONOCHROME, DXGI_OUTPUT_DESC,
 };
 
@@ -103,6 +103,32 @@ struct AdapterState {
     context: ID3D11DeviceContext,
 }
 
+impl AdapterState {
+    fn new(adapter: &IDXGIAdapter) -> Result<Self> {
+        let mut device = None;
+        let mut context = None;
+        unsafe {
+            D3D11CreateDevice(
+                Some(adapter),
+                D3D_DRIVER_TYPE_UNKNOWN,
+                None,
+                D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+                None,
+                D3D11_SDK_VERSION,
+                Some(&mut device),
+                None,
+                Some(&mut context),
+            )
+        }
+        .map_err(|e| Error::DirectXError(format!("D3D11CreateDevice: {e}")))?;
+        let device = device
+            .ok_or_else(|| Error::DirectXError("D3D11CreateDevice: null device".to_string()))?;
+        let context = context
+            .ok_or_else(|| Error::DirectXError("D3D11CreateDevice: null context".to_string()))?;
+        Ok(Self { device, context })
+    }
+}
+
 struct CachedCursorShape {
     info: DXGI_OUTDUPL_POINTER_SHAPE_INFO,
     buf: Vec<u8>,
@@ -132,43 +158,43 @@ impl WindowsCapture {
         let _ = _preference;
         let factory: IDXGIFactory1 = unsafe { CreateDXGIFactory1() }
             .map_err(|e| Error::DirectXError(format!("CreateDXGIFactory1: {e}")))?;
+        let candidates = (0u32..).map_while(|index| {
+            unsafe { factory.EnumAdapters1(index) }
+                .ok()
+                .map(|adapter| (index, adapter))
+        });
+        let (adapters, output_info) = Self::initialize_adapters(candidates, AdapterState::new)?;
+        Ok(Self {
+            adapters,
+            output_info,
+            dup_cache: HashMap::new(),
+            factory,
+        })
+    }
+
+    fn initialize_adapters(
+        mut candidates: impl Iterator<Item = (u32, IDXGIAdapter1)>,
+        mut create_device: impl FnMut(&IDXGIAdapter) -> Result<AdapterState>,
+    ) -> Result<(Vec<AdapterState>, Vec<OutputInfo>)> {
         let mut adapters = Vec::new();
         let mut output_info = Vec::new();
-        for adapter_idx in 0u32.. {
-            let adapter: IDXGIAdapter1 = match unsafe { factory.EnumAdapters1(adapter_idx) } {
-                Ok(a) => a,
-                Err(_) => break,
-            };
+        let mut first_device_error = None;
+        let result = candidates.try_for_each(|(adapter_idx, adapter)| {
             let desc = unsafe { adapter.GetDesc1() }
                 .map_err(|e| Error::DirectXError(format!("GetDesc1: {e}")))?;
             if (desc.Flags & 1) != 0 {
-                continue;
+                return Ok(());
             }
-            let mut device: Option<ID3D11Device> = None;
-            let mut context: Option<ID3D11DeviceContext> = None;
-            let adapter_base: windows::Win32::Graphics::Dxgi::IDXGIAdapter =
-                adapter.cast().map_err(|e| {
-                    Error::DirectXError(format!("Cast IDXGIAdapter1 -> IDXGIAdapter: {e}"))
-                })?;
-            unsafe {
-                D3D11CreateDevice(
-                    Some(&adapter_base),
-                    D3D_DRIVER_TYPE_UNKNOWN,
-                    None,
-                    D3D11_CREATE_DEVICE_BGRA_SUPPORT,
-                    None,
-                    D3D11_SDK_VERSION,
-                    Some(&mut device),
-                    None,
-                    Some(&mut context),
-                )
-            }
-            .map_err(|e| Error::DirectXError(format!("D3D11CreateDevice: {e}")))?;
-            let device = device
-                .ok_or_else(|| Error::DirectXError("D3D11CreateDevice: null device".to_string()))?;
-            let context = context.ok_or_else(|| {
-                Error::DirectXError("D3D11CreateDevice: null context".to_string())
+            let adapter_base = adapter.cast().map_err(|e| {
+                Error::DirectXError(format!("Cast IDXGIAdapter1 -> IDXGIAdapter: {e}"))
             })?;
+            let state = match create_device(&adapter_base) {
+                Ok(state) => state,
+                Err(error) => {
+                    first_device_error.get_or_insert(error);
+                    return Ok(());
+                }
+            };
             let mut has_outputs = false;
             for output_idx in 0u32.. {
                 let output: IDXGIOutput = match unsafe { adapter.EnumOutputs(output_idx) } {
@@ -191,18 +217,16 @@ impl WindowsCapture {
                 has_outputs = true;
             }
             if has_outputs {
-                adapters.push(AdapterState { device, context });
+                adapters.push(state);
             }
+            Ok(())
+        });
+        // If initialization still fails, report the error that would have stopped it first.
+        match result {
+            Err(error) => Err(first_device_error.unwrap_or(error)),
+            Ok(()) if output_info.is_empty() => Err(first_device_error.unwrap_or(Error::NoOutputs)),
+            Ok(()) => Ok((adapters, output_info)),
         }
-        if output_info.is_empty() {
-            return Err(Error::NoOutputs);
-        }
-        Ok(Self {
-            adapters,
-            output_info,
-            dup_cache: HashMap::new(),
-            factory,
-        })
     }
 
     fn get_dup(&mut self, info: &OutputInfo) -> Result<()> {
@@ -924,6 +948,23 @@ mod tests {
     #[test]
     fn build_outputs_empty_returns_no_outputs() {
         assert!(matches!(build_outputs(&[]), Err(Error::NoOutputs)));
+    }
+
+    #[test]
+    fn adapter_initialization_keeps_trying_and_returns_the_first_device_error() {
+        let factory: IDXGIFactory1 = unsafe { CreateDXGIFactory1() }.unwrap();
+        let adapter = (0u32..)
+            .map_while(|index| unsafe { factory.EnumAdapters1(index) }.ok())
+            .find(|adapter| unsafe { adapter.GetDesc1() }.unwrap().Flags & 1 == 0)
+            .expect("a local DXGI adapter");
+        let candidates = [(0, adapter.clone()), (1, adapter)];
+        let mut attempts = 0;
+        let result = WindowsCapture::initialize_adapters(candidates.into_iter(), |_| {
+            attempts += 1;
+            Err(Error::DirectXError(format!("device error {attempts}")))
+        });
+        assert_eq!(attempts, 2);
+        assert!(matches!(result, Err(Error::DirectXError(message)) if message == "device error 1"));
     }
 
     #[test]
