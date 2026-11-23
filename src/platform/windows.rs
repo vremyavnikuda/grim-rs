@@ -62,12 +62,18 @@ struct OutputInfo {
     height: i32,
     rotation: u32,
     description: String,
-    adapter_idx: usize,
+    adapter_slot: usize,
+    dxgi_adapter_idx: u32,
     output_idx: usize,
 }
 
 impl OutputInfo {
-    fn from_desc(desc: &DXGI_OUTPUT_DESC, adapter_idx: usize, output_idx: usize) -> Self {
+    fn from_desc(
+        desc: &DXGI_OUTPUT_DESC,
+        adapter_slot: usize,
+        dxgi_adapter_idx: u32,
+        output_idx: usize,
+    ) -> Self {
         let name = String::from_utf16_lossy(&desc.DeviceName)
             .trim_end_matches('\0')
             .to_string();
@@ -80,9 +86,15 @@ impl OutputInfo {
             height: desc.DesktopCoordinates.bottom - desc.DesktopCoordinates.top,
             rotation: desc.Rotation.0 as u32,
             description: name,
-            adapter_idx,
+            adapter_slot,
+            dxgi_adapter_idx,
             output_idx,
         }
+    }
+
+    fn dxgi_adapter(&self, factory: &IDXGIFactory1) -> Result<IDXGIAdapter1> {
+        unsafe { factory.EnumAdapters1(self.dxgi_adapter_idx) }
+            .map_err(|e| Error::DirectXError(format!("EnumAdapters1: {e}")))
     }
 }
 
@@ -173,6 +185,7 @@ impl WindowsCapture {
                 output_info.push(OutputInfo::from_desc(
                     &desc,
                     adapters.len(),
+                    adapter_idx,
                     output_idx as usize,
                 ));
                 has_outputs = true;
@@ -196,9 +209,8 @@ impl WindowsCapture {
         if self.dup_cache.contains_key(&info.name) {
             return Ok(());
         }
-        let adapter_state = &self.adapters[info.adapter_idx];
-        let adapter: IDXGIAdapter1 = unsafe { self.factory.EnumAdapters1(info.adapter_idx as u32) }
-            .map_err(|e| Error::DirectXError(format!("EnumAdapters1: {e}")))?;
+        let adapter_state = &self.adapters[info.adapter_slot];
+        let adapter = info.dxgi_adapter(&self.factory)?;
         let output: IDXGIOutput = unsafe { adapter.EnumOutputs(info.output_idx as u32) }
             .map_err(|e| Error::DirectXError(format!("EnumOutputs: {e}")))?;
         let output1: windows::Win32::Graphics::Dxgi::IDXGIOutput1 = output
@@ -297,7 +309,7 @@ impl WindowsCapture {
                             continue;
                         }
                     };
-                    let adapter = &self.adapters[info.adapter_idx];
+                    let adapter = &self.adapters[info.adapter_slot];
                     let texture: ID3D11Texture2D = resource.cast().map_err(|e| {
                         let _ = unsafe { dup.ReleaseFrame() };
                         Error::DirectXError(format!("Cast IDXGIResource -> ID3D11Texture2D: {e}"))
@@ -832,7 +844,7 @@ mod tests {
                 Rotation: DXGI_MODE_ROTATION(rotation),
                 ..Default::default()
             };
-            let info = OutputInfo::from_desc(&desc, 0, 0);
+            let info = OutputInfo::from_desc(&desc, 0, 0, 0);
             let outputs = build_outputs(&[info]).unwrap();
             assert_eq!(
                 outputs[0].geometry(),
@@ -915,6 +927,22 @@ mod tests {
     }
 
     #[test]
+    fn duplication_uses_the_original_dxgi_adapter_index() {
+        let factory: IDXGIFactory1 = unsafe { CreateDXGIFactory1() }.unwrap();
+        assert!(unsafe { factory.EnumAdapters1(0) }.is_ok());
+
+        // Simulate a compact slot of 0 with a different native index. An unavailable
+        // native index also verifies the lookup's error without starting duplication.
+        let dxgi_index = u32::MAX;
+        let info = OutputInfo::from_desc(&DXGI_OUTPUT_DESC::default(), 0, dxgi_index, 0);
+        let expected = unsafe { factory.EnumAdapters1(dxgi_index) }.unwrap_err();
+        assert!(matches!(
+            info.dxgi_adapter(&factory),
+            Err(Error::DirectXError(message)) if message == format!("EnumAdapters1: {expected}")
+        ));
+    }
+
+    #[test]
     fn output_capture_rejects_out_of_bounds_regions_before_duplication() {
         let desc = DXGI_OUTPUT_DESC {
             DesktopCoordinates: RECT {
@@ -924,7 +952,7 @@ mod tests {
             },
             ..Default::default()
         };
-        let mut info = OutputInfo::from_desc(&desc, 0, 0);
+        let mut info = OutputInfo::from_desc(&desc, 0, 0, 0);
         info.name = "DISPLAY1".to_string();
         let mut capture = WindowsCapture {
             // Invalid regions must be rejected before a D3D device is needed.
@@ -956,7 +984,8 @@ mod tests {
             height: 1440,
             rotation: 1,
             description: String::new(),
-            adapter_idx: 0,
+            adapter_slot: 0,
+            dxgi_adapter_idx: 0,
             output_idx: 0,
         }];
         let outputs = build_outputs(&info).expect("non-empty list");
