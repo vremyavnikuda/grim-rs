@@ -98,6 +98,15 @@ fn cli_fails_for_non_numeric_scale() {
 }
 
 #[test]
+fn cli_rejects_non_positive_or_non_finite_scale() {
+    for scale in ["nan", "-1", "0", "-0", "inf", "-inf"] {
+        let output = run_cli(&["-s", scale, "-"]);
+        assert_eq!(output.status.code(), Some(1), "scale {scale}");
+        assert_stderr_contains(&output, "scale must be a positive finite number");
+    }
+}
+
+#[test]
 fn cli_fails_for_non_numeric_quality() {
     let output = run_cli(&["-q", "bad"]);
     assert!(!output.status.success());

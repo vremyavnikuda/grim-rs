@@ -120,6 +120,13 @@ fn main() -> grim_rs::Result<()> {
     if opts.with_cursor && opts.output_name.is_none() {
         eprintln!("Warning: -c is only supported together with -o; cursor will not be included");
     }
+    if opts
+        .scale
+        .is_some_and(|scale| !scale.is_finite() || scale <= 0.0)
+    {
+        eprintln!("Error: scale must be a positive finite number");
+        std::process::exit(1);
+    }
     let output_file = if let Some(file) = output_file {
         file
     } else {
