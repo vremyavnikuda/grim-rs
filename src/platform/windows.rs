@@ -6,7 +6,7 @@ use crate::{
     Result,
 };
 
-use windows::core::Interface;
+use windows::core::{Interface, PCWSTR};
 use windows::Win32::Graphics::Direct3D::D3D_DRIVER_TYPE_UNKNOWN;
 use windows::Win32::Graphics::Direct3D11::{
     D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, ID3D11Texture2D, D3D11_CPU_ACCESS_READ,
@@ -19,6 +19,10 @@ use windows::Win32::Graphics::Dxgi::{
     IDXGIOutputDuplication, IDXGIResource, DXGI_ERROR_ACCESS_LOST, DXGI_ERROR_WAIT_TIMEOUT,
     DXGI_OUTDUPL_FRAME_INFO, DXGI_OUTDUPL_POINTER_POSITION, DXGI_OUTDUPL_POINTER_SHAPE_INFO,
     DXGI_OUTDUPL_POINTER_SHAPE_TYPE_MONOCHROME, DXGI_OUTPUT_DESC,
+};
+use windows::Win32::Graphics::Gdi::{
+    EnumDisplaySettingsExW, DEVMODEW, DM_PELSHEIGHT, DM_PELSWIDTH, DM_POSITION,
+    ENUM_CURRENT_SETTINGS, ENUM_DISPLAY_SETTINGS_FLAGS,
 };
 
 const MAX_ACQUIRE_ATTEMPTS: usize = 100;
@@ -98,6 +102,53 @@ impl OutputInfo {
     }
 }
 
+fn physical_output_geometry(name: &str) -> Option<Region> {
+    let name: Vec<_> = name.encode_utf16().chain(Some(0)).collect();
+    let mut mode = DEVMODEW {
+        dmSize: std::mem::size_of::<DEVMODEW>() as u16,
+        ..Default::default()
+    };
+    let required_fields = DM_POSITION | DM_PELSWIDTH | DM_PELSHEIGHT;
+    let found = unsafe {
+        EnumDisplaySettingsExW(
+            PCWSTR(name.as_ptr()),
+            ENUM_CURRENT_SETTINGS,
+            &mut mode,
+            ENUM_DISPLAY_SETTINGS_FLAGS(0),
+        )
+    };
+    if !found.as_bool() || mode.dmFields & required_fields != required_fields {
+        return None;
+    }
+    let position = unsafe { mode.Anonymous1.Anonymous2.dmPosition };
+    let width = i32::try_from(mode.dmPelsWidth).ok()?;
+    let height = i32::try_from(mode.dmPelsHeight).ok()?;
+    let geometry = Region::new(position.x, position.y, width, height);
+    position.x.checked_add(width)?;
+    position.y.checked_add(height)?;
+    (!geometry.is_empty()).then_some(geometry)
+}
+
+fn apply_physical_output_geometry(
+    outputs: &mut [OutputInfo],
+    mut read_geometry: impl FnMut(&str) -> Option<Region>,
+) {
+    // shortcut: a missing GDI mode leaves all outputs in DXGI space, add a second physical source if this affects scaled displays.
+    let Some(geometry) = outputs
+        .iter()
+        .map(|output| read_geometry(&output.name))
+        .collect::<Option<Vec<_>>>()
+    else {
+        return;
+    };
+    for (output, region) in outputs.iter_mut().zip(geometry) {
+        output.x = region.x();
+        output.y = region.y();
+        output.width = region.width();
+        output.height = region.height();
+    }
+}
+
 struct AdapterState {
     device: ID3D11Device,
     context: ID3D11DeviceContext,
@@ -163,7 +214,8 @@ impl WindowsCapture {
                 .ok()
                 .map(|adapter| (index, adapter))
         });
-        let (adapters, output_info) = Self::initialize_adapters(candidates, AdapterState::new)?;
+        let (adapters, mut output_info) = Self::initialize_adapters(candidates, AdapterState::new)?;
+        apply_physical_output_geometry(&mut output_info, physical_output_geometry);
         Ok(Self {
             adapters,
             output_info,
@@ -876,6 +928,60 @@ mod tests {
                 "rotation {rotation}"
             );
         }
+    }
+
+    #[test]
+    fn desktop_geometry_uses_physical_pixels_only_when_all_outputs_are_available() {
+        let fixture = |name: &str, desktop_coordinates, rotation| {
+            let desc = DXGI_OUTPUT_DESC {
+                DesktopCoordinates: desktop_coordinates,
+                Rotation: DXGI_MODE_ROTATION(rotation),
+                ..Default::default()
+            };
+            let mut output = OutputInfo::from_desc(&desc, 0, 0, 0);
+            output.name = name.to_owned();
+            output
+        };
+        let mut outputs = [
+            fixture(
+                "left",
+                RECT {
+                    left: -1280,
+                    top: 0,
+                    right: 0,
+                    bottom: 720,
+                },
+                1,
+            ),
+            fixture(
+                "portrait",
+                RECT {
+                    left: 0,
+                    top: 0,
+                    right: 864,
+                    bottom: 1536,
+                },
+                2,
+            ),
+        ];
+        let physical = [
+            Region::new(-1920, 0, 1920, 1080),
+            Region::new(0, 0, 1080, 1920),
+        ];
+        let dxgi = [
+            Region::new(-1280, 0, 1280, 720),
+            Region::new(0, 0, 864, 1536),
+        ];
+        for (portrait_available, expected) in [(false, dxgi), (true, physical)] {
+            apply_physical_output_geometry(&mut outputs, |name| match name {
+                "left" => Some(physical[0]),
+                "portrait" => portrait_available.then_some(physical[1]),
+                _ => None,
+            });
+            let outputs = build_outputs(&outputs).unwrap();
+            assert_eq!([*outputs[0].geometry(), *outputs[1].geometry()], expected);
+        }
+        assert_eq!(outputs[1].rotation, 2);
     }
 
     #[test]
