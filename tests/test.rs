@@ -631,6 +631,29 @@ fn test_new_ext_can_capture() {
     // ext not available — skip
 }
 
+#[cfg(target_os = "linux")]
+#[test]
+fn wayland_rejects_empty_regions_on_selected_output() {
+    for connect in [Grim::new_ext, Grim::new_wlr] {
+        let mut grim = match connect() {
+            Ok(grim) => grim,
+            Err(Error::WaylandConnection(_) | Error::UnsupportedProtocol(_) | Error::NoOutputs) => {
+                continue
+            }
+            Err(err) => panic!("Wayland initialization failed: {err}"),
+        };
+        let outputs = grim.get_outputs().unwrap();
+        let name = outputs[0].name();
+        for (width, height) in [(0, 20), (32, 0), (-1, 20), (32, -1)] {
+            let param = CaptureParameters::new(name).region(Region::new(0, 0, width, height));
+            assert!(matches!(
+                grim.capture_outputs(vec![param]),
+                Err(Error::InvalidRegion(_))
+            ));
+        }
+    }
+}
+
 #[test]
 fn test_new_wlr_can_capture() {
     if let Ok(mut grim) = Grim::new_wlr() {

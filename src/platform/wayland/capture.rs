@@ -618,6 +618,11 @@ impl WaylandCapture {
                         "Capture region extends outside output boundaries".to_string(),
                     ));
                 }
+                if region.is_empty() {
+                    return Err(Error::InvalidRegion(
+                        "Capture region must have positive width and height".to_string(),
+                    ));
+                }
                 *region
             } else {
                 Region::new(0, 0, output_info.logical_width, output_info.logical_height)
@@ -864,6 +869,11 @@ impl WaylandCapture {
                 {
                     return Err(Error::InvalidRegion(
                         "Capture region extends outside output boundaries".to_string(),
+                    ));
+                }
+                if region.is_empty() {
+                    return Err(Error::InvalidRegion(
+                        "Capture region must have positive width and height".to_string(),
                     ));
                 }
                 *region
