@@ -73,7 +73,7 @@ fn png_compression_level(level: u8) -> png::Compression {
 fn dimension_mismatch(data_len: usize, width: u32, height: u32) -> Error {
     Error::InvalidData(format!(
         "expected {} bytes for {}x{} RGBA, got {}",
-        u64::from(width) * u64::from(height) * 4,
+        u128::from(width) * u128::from(height) * 4,
         width,
         height,
         data_len
