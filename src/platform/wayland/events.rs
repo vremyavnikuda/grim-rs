@@ -18,43 +18,6 @@ impl Dispatch<WlRegistry, ()> for WaylandCapture {
         } = event
         {
             match interface.as_str() {
-                "wl_compositor" => {
-                    state.globals.compositor =
-                        Some(registry.bind::<WlCompositor, _, _>(name, version, qh, ()));
-                }
-                "wl_shm" => {
-                    state.globals.shm = Some(registry.bind::<WlShm, _, _>(name, version, qh, ()));
-                }
-                "zwlr_screencopy_manager_v1" => {
-                    state.globals.screencopy_manager =
-                        Some(registry.bind::<ZwlrScreencopyManagerV1, _, _>(name, version, qh, ()));
-                }
-                "zxdg_output_manager_v1" => {
-                    state.globals.xdg_output_manager =
-                        Some(registry.bind::<ZxdgOutputManagerV1, _, _>(name, version, qh, ()));
-
-                    if let Some(ref xdg_output_manager) = state.globals.xdg_output_manager {
-                        for output in &state.globals.outputs {
-                            let xdg_output = xdg_output_manager.get_xdg_output(output, qh, ());
-                            let output_id = output.id().protocol_id();
-                            state.globals.output_xdg_map.insert(output_id, xdg_output);
-                        }
-                    }
-                }
-                "ext_output_image_capture_source_manager_v1" => {
-                    state.globals.ext_source_manager =
-                        Some(registry.bind::<ExtOutputImageCaptureSourceManagerV1, _, _>(
-                            name,
-                            version,
-                            qh,
-                            (),
-                        ));
-                }
-                "ext_image_copy_capture_manager_v1" => {
-                    state.globals.ext_copy_manager = Some(
-                        registry.bind::<ExtImageCopyCaptureManagerV1, _, _>(name, version, qh, ()),
-                    );
-                }
                 "wl_output" => {
                     let output = registry.bind::<WlOutput, _, _>(name, version, qh, ());
                     let output_id = output.id().protocol_id();
@@ -85,6 +48,39 @@ impl Dispatch<WlRegistry, ()> for WaylandCapture {
                         let output_id = output_to_use.id().protocol_id();
                         state.globals.output_xdg_map.insert(output_id, xdg_output);
                     }
+                }
+                _ if state.globals.managers_bound => {}
+                "wl_shm" => {
+                    state.globals.shm = Some(registry.bind::<WlShm, _, _>(name, version, qh, ()));
+                }
+                "zwlr_screencopy_manager_v1" => {
+                    state.globals.screencopy_manager =
+                        Some(registry.bind::<ZwlrScreencopyManagerV1, _, _>(name, version, qh, ()));
+                }
+                "zxdg_output_manager_v1" => {
+                    state.globals.xdg_output_manager =
+                        Some(registry.bind::<ZxdgOutputManagerV1, _, _>(name, version, qh, ()));
+                    if let Some(ref xdg_output_manager) = state.globals.xdg_output_manager {
+                        for output in &state.globals.outputs {
+                            let xdg_output = xdg_output_manager.get_xdg_output(output, qh, ());
+                            let output_id = output.id().protocol_id();
+                            state.globals.output_xdg_map.insert(output_id, xdg_output);
+                        }
+                    }
+                }
+                "ext_output_image_capture_source_manager_v1" => {
+                    state.globals.ext_source_manager =
+                        Some(registry.bind::<ExtOutputImageCaptureSourceManagerV1, _, _>(
+                            name,
+                            version,
+                            qh,
+                            (),
+                        ));
+                }
+                "ext_image_copy_capture_manager_v1" => {
+                    state.globals.ext_copy_manager = Some(
+                        registry.bind::<ExtImageCopyCaptureManagerV1, _, _>(name, version, qh, ()),
+                    );
                 }
                 _ => {}
             }
@@ -124,7 +120,6 @@ impl Dispatch<WlOutput, ()> for WaylandCapture {
                         info.logical_x = x;
                         info.logical_y = y;
                     }
-
                     update_logical_scale(info);
                 }
             }
@@ -148,7 +143,6 @@ impl Dispatch<WlOutput, ()> for WaylandCapture {
                         info.logical_width = width;
                         info.logical_height = height;
                     }
-
                     update_logical_scale(info);
                 }
             }
@@ -170,18 +164,6 @@ impl Dispatch<WlOutput, ()> for WaylandCapture {
             }
             _ => {}
         }
-    }
-}
-
-impl Dispatch<WlCompositor, ()> for WaylandCapture {
-    fn event(
-        _state: &mut Self,
-        _proxy: &WlCompositor,
-        _event: <WlCompositor as Proxy>::Event,
-        _data: &(),
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
-    ) {
     }
 }
 
@@ -355,9 +337,7 @@ impl Dispatch<ZxdgOutputV1, ()> for WaylandCapture {
         _qh: &QueueHandle<Self>,
     ) {
         use wayland_protocols::xdg::xdg_output::zv1::client::zxdg_output_v1::Event;
-
         let xdg_output_id = xdg_output.id().protocol_id();
-
         let mut found_output_id = None;
         for (wl_output_id, mapped_xdg_output) in &state.globals.output_xdg_map {
             if mapped_xdg_output.id().protocol_id() == xdg_output_id {
@@ -505,6 +485,7 @@ impl Dispatch<ExtImageCopyCaptureSessionV1, Arc<Mutex<FrameState>>> for WaylandC
             Event::Stopped => {
                 log::warn!("Capture session stopped by compositor");
                 s.ready = true;
+                s.failure = Some("capture session stopped by compositor".to_string());
             }
             _ => {}
         }
@@ -536,6 +517,7 @@ impl Dispatch<ExtImageCopyCaptureFrameV1, Arc<Mutex<FrameState>>> for WaylandCap
             Event::Failed { reason } => {
                 log::error!("Capture frame failed: reason={:?}", reason);
                 s.ready = true;
+                s.failure = Some(format!("capture frame failed: {reason:?}"));
                 frame.destroy();
             }
             _ => {}

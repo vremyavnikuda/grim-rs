@@ -16,7 +16,7 @@ For full rustdoc details, see [docs.rs/grim-rs](https://docs.rs/grim-rs).
 
 ### Getting Display Information
 
-- `get_outputs()` - Get list of available outputs with their properties (name, geometry, scale)
+- `get_outputs()` - Get list of available outputs with their properties (name, geometry, scale); returns `Error::NoOutputs` when no outputs are available (same contract on Linux and Windows)
 
 ### Capture Methods
 
@@ -68,9 +68,9 @@ For full rustdoc details, see [docs.rs/grim-rs](https://docs.rs/grim-rs).
 
 - Fields are private (builder + getters API)
 - `CaptureParameters::new(output_name)` - Create parameters for an output
-- Builder methods: `.region(...)`, `.overlay_cursor(...)`, `.scale(...)`
-- Accessors: `output_name()`, `region_ref()`, `overlay_cursor_enabled()`, `scale_factor()`
-- Note: per-output `scale` is currently stored in params; effective scaling in multi-output capture is applied by `capture_outputs_with_scale(..., default_scale)`
+- Builder methods: `.region(...)`, `.overlay_cursor(...)`
+- Accessors: `output_name()`, `region_ref()`, `overlay_cursor_enabled()`
+- Deprecated: `.scale(...)` / `scale_factor()` (since 0.2.2) — per-output scale was never implemented by any backend and the value is ignored. Scale the whole capture via the `capture_*_with_scale(...)` methods instead.
 
 ### `MultiOutputCaptureResult`
 
@@ -116,6 +116,7 @@ if let Some(fmt) = pixel_format::fourcc_to_format(0x34325241) {
 
 ## Feature Flags
 
+- **`png_support`** - Enable PNG support (enabled by default). When disabled, the PNG methods are compiled as stubs that return an `Unsupported` error, so code calling them still builds.
 - **`jpeg`** - Enable JPEG support (enabled by default)
   - Adds `save_jpeg*`, `to_jpeg*`, and `write_jpeg_to_stdout*` methods
 
@@ -123,5 +124,5 @@ To disable default features:
 
 ```toml
 [dependencies]
-grim-rs = { version = "0.1", default-features = false }
+grim-rs = { version = "0.2", default-features = false }
 ```

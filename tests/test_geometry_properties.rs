@@ -119,6 +119,27 @@ proptest! {
     }
 
     #[test]
+    fn extreme_coordinates_dont_panic(
+        x1 in prop::num::i32::ANY, y1 in prop::num::i32::ANY,
+        w1 in 1i32..=i32::MAX, h1 in 1i32..=i32::MAX,
+        x2 in prop::num::i32::ANY, y2 in prop::num::i32::ANY,
+        w2 in 1i32..=i32::MAX, h2 in 1i32..=i32::MAX
+    ) {
+        let box1 = Region::new(x1, y1, w1, h1);
+        let box2 = Region::new(x2, y2, w2, h2);
+
+        let int1 = box1.intersection(&box2);
+        let int2 = box2.intersection(&box1);
+
+        prop_assert_eq!(int1, int2, "intersection() should be commutative");
+        prop_assert_eq!(
+            int1.is_some(),
+            box1.intersects(&box2),
+            "intersection() should return Some iff intersects() is true"
+        );
+    }
+
+    #[test]
     fn parse_and_display_roundtrip(x in -1000i32..1000, y in -1000i32..1000,
                                      w in 0i32..500, h in 0i32..500) {
         let original = Region::new(x, y, w, h);
@@ -170,5 +191,19 @@ mod unit_tests {
         assert!(box1.is_empty());
         assert!(box2.is_empty());
         assert!(box3.is_empty());
+    }
+
+    #[test]
+    fn overflowing_extents_dont_panic() {
+        let huge = Region::new(i32::MAX - 5, 0, 100, 100);
+        let small = Region::new(0, 0, 10, 10);
+
+        assert!(!huge.intersects(&small));
+        assert_eq!(huge.intersection(&small), None);
+
+        let huge2 = Region::new(i32::MAX - 50, 0, 100, 100);
+        assert!(huge.intersects(&huge2));
+        let intersection = huge.intersection(&huge2).unwrap();
+        assert!(intersection.width() > 0);
     }
 }

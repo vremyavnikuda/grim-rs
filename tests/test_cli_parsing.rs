@@ -1,4 +1,4 @@
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 fn run_cli(args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_grim-rs"))
@@ -98,6 +98,15 @@ fn cli_fails_for_non_numeric_scale() {
 }
 
 #[test]
+fn cli_rejects_non_positive_or_non_finite_scale() {
+    for scale in ["nan", "-1", "0", "-0", "inf", "-inf"] {
+        let output = run_cli(&["-s", scale, "-"]);
+        assert_eq!(output.status.code(), Some(1), "scale {scale}");
+        assert_stderr_contains(&output, "scale must be a positive finite number");
+    }
+}
+
+#[test]
 fn cli_fails_for_non_numeric_quality() {
     let output = run_cli(&["-q", "bad"]);
     assert!(!output.status.success());
@@ -109,4 +118,14 @@ fn cli_fails_for_too_many_positional_arguments() {
     let output = run_cli(&["out1.png", "out2.png"]);
     assert!(!output.status.success());
     assert_stderr_contains(&output, "Error: too many arguments");
+}
+
+#[test]
+fn cli_warns_when_cursor_flag_without_output_name() {
+    let output = Command::new(env!("CARGO_BIN_EXE_grim-rs"))
+        .args(["-c", "-"])
+        .stdout(Stdio::null())
+        .output()
+        .expect("failed to run grim-rs binary");
+    assert_stderr_contains(&output, "Warning: -c is only supported together with -o");
 }

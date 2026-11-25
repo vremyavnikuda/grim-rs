@@ -22,7 +22,6 @@ fn parse_arg_value(args: &[String], key: &str) -> Option<String> {
 fn run_case(kind: &str, width: u32, height: u32, out_file: &str) -> grim_rs::Result<()> {
     let _profiler = Profiler::builder().file_name(out_file).build();
     let mut grim = Grim::new()?;
-
     match kind {
         "png" => {
             let data = generate_test_data(width, height);
@@ -227,17 +226,14 @@ fn run_case(kind: &str, width: u32, height: u32, out_file: &str) -> grim_rs::Res
             return Ok(());
         }
     }
-
     Ok(())
 }
 
 fn spawn_cases() -> grim_rs::Result<()> {
     let exe = env::current_exe().map_err(grim_rs::Error::Io)?;
     let sizes = [(640, 480), (1920, 1080), (3840, 2160)];
-
     let output_dir = "target/dhat";
     fs::create_dir_all(output_dir).map_err(grim_rs::Error::Io)?;
-
     let kinds = [
         "png",
         "png_compress",
@@ -253,7 +249,6 @@ fn spawn_cases() -> grim_rs::Result<()> {
         "capture_outputs_scale",
         "capture_all_save_png",
     ];
-
     for (width, height) in sizes {
         for kind in kinds {
             let filename = format!("{}/{}_{}x{}.json", output_dir, kind, width, height);
@@ -301,7 +296,6 @@ fn spawn_cases() -> grim_rs::Result<()> {
             }
         }
     }
-
     Ok(())
 }
 

@@ -115,6 +115,16 @@
     "description": "The task has been inactive for a long period of time."
   },
   {
+    "name": "resolution:completed",
+    "color": "116329",
+    "description": "Completed explicitly by a maintainer or by the merged PR that closed the issue"
+  },
+  {
+    "name": "resolution:unconfirmed",
+    "color": "8C959F",
+    "description": "Closed because the problem could not be confirmed or the required information was unavailable"
+  },
+  {
     "name": "duplicate",
     "color": "cfd3d7",
     "description": "This issue or pull request already exists"
@@ -152,7 +162,7 @@
   {
     "name": "status:in-progress",
     "color": "FBCA04",
-    "description": "Issue has active Development, or PR is a draft"
+    "description": "Issue has active Development, or PR implementation is in progress"
   },
   {
     "name": "status:need-review",

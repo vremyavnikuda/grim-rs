@@ -63,12 +63,10 @@ fn test_capture_result_struct() {
 fn test_capture_parameters_struct() {
     let params = CaptureParameters::new("eDP-1")
         .region(Region::new(0, 0, 800, 600))
-        .overlay_cursor(true)
-        .scale(1.5);
+        .overlay_cursor(true);
     assert_eq!(params.output_name(), "eDP-1");
     assert_eq!(params.region_ref(), Some(&Region::new(0, 0, 800, 600)));
     assert!(params.overlay_cursor_enabled());
-    assert_eq!(params.scale_factor(), Some(1.5));
 }
 
 #[test]
@@ -119,6 +117,7 @@ fn test_convert_argb8888_to_rgba_preserves_alpha() {
     assert_eq!(pixel_data, vec![30, 20, 10, 40]);
 }
 
+#[cfg(feature = "png_support")]
 #[test]
 fn test_png_compression_levels() {
     let test_data = vec![255u8; 100 * 100 * 4]; // 100x100 image
@@ -130,13 +129,55 @@ fn test_png_compression_levels() {
     }
 }
 
+#[cfg(feature = "png_support")]
+#[test]
+#[allow(clippy::chunks_exact_to_as_chunks)] // as_chunks needs Rust 1.88; crate MSRV is 1.82
+fn test_png_compression_level_mapping() {
+    // Gradient mixed with LCG noise: compressible, but not trivially.
+    let w = 128u32;
+    let h = 128u32;
+    let mut data = vec![0u8; (w * h * 4) as usize];
+    let mut state = 0x1234_5678u32;
+    for (i, px) in data.chunks_exact_mut(4).enumerate() {
+        let x = i as u32 % w;
+        let y = i as u32 / w;
+        state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        let noise = (state >> 24) as u8;
+        px[0] = (x * 2) as u8 ^ (noise & 0x0f);
+        px[1] = (y * 2) as u8 ^ (noise & 0x0f);
+        px[2] = (x + y) as u8 | (noise & 0x30);
+        px[3] = 255;
+    }
+    if let Ok(grim) = Grim::new() {
+        let mut sizes = [0usize; 10];
+        for (level, size) in sizes.iter_mut().enumerate() {
+            let png = grim
+                .to_png_with_compression(&data, w, h, level as u8)
+                .unwrap();
+            assert!(
+                png.starts_with(&[137, 80, 78, 71, 13, 10, 26, 10]),
+                "level {level}: invalid PNG signature"
+            );
+            *size = png.len();
+        }
+        // Compression effort grows monotonically with the level.
+        assert!(
+            sizes[9] < sizes[0],
+            "level 9 ({} bytes) should compress better than level 0 ({} bytes)",
+            sizes[9],
+            sizes[0]
+        );
+        assert!(sizes[6] <= sizes[3]);
+        assert!(sizes[3] <= sizes[0]);
+    }
+}
+
 #[test]
 fn test_capture_parameters_default_behavior() {
     let params = CaptureParameters::new("test");
     assert_eq!(params.output_name(), "test");
     assert!(params.region_ref().is_none());
     assert!(!params.overlay_cursor_enabled());
-    assert!(params.scale_factor().is_none());
 }
 
 #[cfg(feature = "jpeg")]
@@ -159,6 +200,19 @@ fn test_jpeg_functionality_unavailable() {
         Ok(grim) => {
             let jpeg_result = grim.to_jpeg(&test_data, 10, 10);
             assert!(jpeg_result.is_err());
+        }
+        Err(_) => {}
+    }
+}
+
+#[cfg(not(feature = "png_support"))]
+#[test]
+fn test_png_functionality_unavailable() {
+    let test_data = vec![255u8; 10 * 10 * 4];
+    match Grim::new() {
+        Ok(grim) => {
+            let png_result = grim.to_png(&test_data, 10, 10);
+            assert!(png_result.is_err());
         }
         Err(_) => {}
     }
@@ -424,7 +478,6 @@ mod y_invert_tests {
     fn test_frame_state_flags_field() {
         let flags: u32 = 0;
         assert_eq!(flags, 0);
-
         let flags_with_invert: u32 = 1;
         assert_eq!(flags_with_invert, 1);
     }
@@ -436,7 +489,6 @@ fn test_mock_capture() {
         let mut grim = Grim::new().unwrap();
         grim.capture_all()
     });
-
     match result {
         Ok(capture_result) => {
             if let Ok(capture) = capture_result {
@@ -455,7 +507,7 @@ fn test_mock_capture() {
 }
 
 #[test]
-#[cfg(feature = "png")]
+#[cfg(feature = "png_support")]
 fn test_to_png() {
     let grim = Grim::new().unwrap();
     let test_data = vec![255u8; 64];
@@ -470,6 +522,21 @@ fn test_to_jpeg() {
     let test_data = vec![255u8; 64];
     let jpeg_data = grim.to_jpeg(&test_data, 4, 4).unwrap();
     assert!(!jpeg_data.is_empty());
+}
+
+#[test]
+#[cfg(feature = "jpeg")]
+fn test_jpeg_rejects_dimensions_over_u16() {
+    if let Ok(grim) = Grim::new() {
+        // JPEG headers store dimensions as u16; larger images must error
+        // out instead of silently truncating.
+        let too_wide = vec![0u8; 65536 * 4];
+        assert!(grim.to_jpeg(&too_wide, 65536, 1).is_err());
+        let too_tall = vec![0u8; 65536 * 4];
+        assert!(grim.to_jpeg(&too_tall, 1, 65536).is_err());
+        let boundary = vec![0u8; 4];
+        assert!(grim.to_jpeg(&boundary, 1, 1).is_ok());
+    }
 }
 
 #[test]
@@ -562,6 +629,29 @@ fn test_new_ext_can_capture() {
         }
     }
     // ext not available — skip
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn wayland_rejects_empty_regions_on_selected_output() {
+    for connect in [Grim::new_ext, Grim::new_wlr] {
+        let mut grim = match connect() {
+            Ok(grim) => grim,
+            Err(Error::WaylandConnection(_) | Error::UnsupportedProtocol(_) | Error::NoOutputs) => {
+                continue
+            }
+            Err(err) => panic!("Wayland initialization failed: {err}"),
+        };
+        let outputs = grim.get_outputs().unwrap();
+        let name = outputs[0].name();
+        for (width, height) in [(0, 20), (32, 0), (-1, 20), (32, -1)] {
+            let param = CaptureParameters::new(name).region(Region::new(0, 0, width, height));
+            assert!(matches!(
+                grim.capture_outputs(vec![param]),
+                Err(Error::InvalidRegion(_))
+            ));
+        }
+    }
 }
 
 #[test]
