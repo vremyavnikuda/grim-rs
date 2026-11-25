@@ -435,7 +435,7 @@ impl WindowsCapture {
                     unsafe { adapter.context.CopyResource(&staging, &texture) };
                     // The shape buffer is only filled when the shape changed;
                     // refresh the cached shape while the frame is still held.
-                    if overlay_cursor && frame_info.PointerShapeBufferSize > 0 {
+                    if frame_info.PointerShapeBufferSize > 0 {
                         if let Some(shape) =
                             fetch_cursor_shape(dup, frame_info.PointerShapeBufferSize)
                         {
