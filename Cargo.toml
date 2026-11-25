@@ -1,6 +1,6 @@
 [package]
 name = "grim-rs"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 rust-version = "1.82"
 description = "Rust implementation of grim screenshot utility for Wayland and Windows"
