@@ -51,10 +51,6 @@ pub use buffer::checked_buffer_size;
 #[doc(hidden)]
 pub use platform::windows::blend_cursor_rgba;
 
-#[cfg(target_os = "windows")]
-#[doc(hidden)]
-pub use platform::windows::blend_mono_cursor_rgba;
-
 #[doc(hidden)]
 pub use transform::{apply_image_transform, rotate_180, rotate_270, rotate_90, OutputTransform};
 
